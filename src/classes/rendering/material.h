@@ -14,10 +14,31 @@
 
 class Material{
 public:
-    std::string tid;
-    glm::vec3 ka, kd, ks;
-    float Ns;
-    std::string map_kd;
-    unsigned int TID_mapKd;
-    unsigned int TID_mapKs;
+    std::string name;
+    glm::vec3 ambient = glm::vec3(0.2f);
+    glm::vec3 diffuse = glm::vec3(0.8f);
+    glm::vec3 specular = glm::vec3(1.0f);
+    float shininess = 32.0f;
+
+    bool needs_texture_loading() const {
+        return (!diffuseMap.empty() && diffuse_texture == 0) ||
+               (!specularMap.empty() && specular_texture == 0) ||
+               (!normalMap.empty() && normal_texture == 0);
+    }
+    
+    // Texture IDs
+    unsigned int diffuse_texture = 0;
+    unsigned int specular_texture = 0;
+    unsigned int normal_texture = 0;
+    
+    // Texture file paths
+    std::string diffuseMap;
+    std::string specularMap;
+    std::string normalMap;
+    
+    bool has_diffuse_texture() const { return diffuse_texture != 0; }
+    bool has_specular_texture() const { return specular_texture != 0; }
+    bool has_normal_texture() const { return normal_texture != 0; }
+    
+    void cleanup();
 };

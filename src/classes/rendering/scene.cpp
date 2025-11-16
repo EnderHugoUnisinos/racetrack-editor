@@ -19,5 +19,21 @@ void Scene::remove_object(int index) {
     }
 }
 void Scene::update(float delta_time){}
-void Scene::cleanup(){};
-void Scene::unload_scene(){};
+void Scene::cleanup() {
+    for (auto obj : objects) {
+        if (obj->mesh) {
+            for (auto group : obj->mesh->groups) {
+                if (group->material) {
+                    group->material->cleanup();
+                }
+                if (group->VAO) {
+                    glDeleteVertexArrays(1, &group->VAO);
+                }
+                if (group->VBO) {
+                    glDeleteBuffers(1, &group->VBO);
+                }
+            }
+        }
+    }
+    objects.clear();
+}

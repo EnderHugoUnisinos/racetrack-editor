@@ -8,11 +8,12 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <unordered_map>
 
 #include "obj3dwriter.h"
 
 void Obj3DWriter::write(std::shared_ptr<Obj3D> obj){
-    std::shared_ptr<Mesh> mesh = load_from_file(obj->file);
+    std::shared_ptr<Mesh> mesh = load_from_file(obj->obj_file);
     obj->mesh = mesh;
     obj->setup_buffers();
 };
@@ -25,26 +26,22 @@ std::shared_ptr<Mesh> Obj3DWriter::load_from_file(const std::string& filename){
         std::cerr << "Error: Could not open file " << filename << std::endl;
         return nullptr;
     }
-    mesh->groups.push_back(std::make_shared<Group>("Default"));
-    std::shared_ptr<Group> group = mesh->groups[0];
 
-    if (!file.is_open()) {
-        std::cerr << "Error: Could not open file " << filename << std::endl;
-        return mesh;
-    }
+    
+    size_t last_slash = filename.find_last_of("/\\");
+    std::string directory = (last_slash == std::string::npos) ? "" : filename.substr(0, last_slash);
 
-            size_t last_slash = filename.find_last_of("/\\");
-    std::string filename_with_ext = (last_slash == std::string::npos) 
-    ? filename 
-    : filename.substr(last_slash + 1);
-
+    std::unordered_map<std::string, std::shared_ptr<Material>> materials;
+    std::shared_ptr<Group> current_group = std::make_shared<Group>("Default");
+    mesh->groups.push_back(current_group);
+    std::string current_material_name;
+    
     /* OBJ3D WRITER
     std::string directory = get_directory(filename);
     std::string configPath = directory + "mesh_config.txt";
     */
     
     std::string line;
-    std::string currentGroup = "default";
     
     while (std::getline(file, line)) {
         std::istringstream iss(line);
@@ -56,28 +53,41 @@ std::shared_ptr<Mesh> Obj3DWriter::load_from_file(const std::string& filename){
             std::string name;
             iss >> name;
             if (!name.empty()) {
-                currentGroup = name;
-                mesh->groups.push_back(std::make_shared<Group>(currentGroup));
-                group = mesh->groups[mesh->groups.size() - 1];
+                current_group = std::make_shared<Group>(name);
+                mesh->groups.push_back(current_group);
+                current_material_name.clear();
+            }
+        }
+        else if (prefix == "mtllib") {
+            std::string mtl_file;
+            iss >> mtl_file;
+            std::string full_mtl_path = directory + "/" + mtl_file;
+            auto loaded_materials = load_materials(full_mtl_path);
+            materials.insert(loaded_materials.begin(), loaded_materials.end());
+        }
+        else if (prefix == "usemtl") {
+            iss >> current_material_name;
+            if (current_group && materials.find(current_material_name) != materials.end()) {
+                current_group->material = materials[current_material_name];
             }
         }
         else if (prefix == "v") {
             // vertex
             glm::vec3 position;
             iss >> position.x >> position.y >> position.z;
-            if (group) mesh->verts.push_back(position);
+            mesh->verts.push_back(position);
         }
         else if (prefix == "vt") {
             // texture coord
             glm::vec2 texCoord;
             iss >> texCoord.x >> texCoord.y;
-            if (group) mesh->mappings.push_back(texCoord);
+            mesh->mappings.push_back(texCoord);
         }
         else if (prefix == "vn") {
             // normal
             glm::vec3 normal;
             iss >> normal.x >> normal.y >> normal.z;
-            if (group) mesh->normals.push_back(normal);
+            mesh->normals.push_back(normal);
         }
         else if (prefix == "f") {
             // face
@@ -98,8 +108,8 @@ std::shared_ptr<Mesh> Obj3DWriter::load_from_file(const std::string& filename){
                 face->normals.push_back(indices[2]);
             }
             
-            if (group && face->verts.size() >= 3) {
-                group->faces.push_back(face);
+            if (current_group && face->verts.size() >= 3) {
+                current_group->faces.push_back(face);
             }
         }
     }
@@ -130,9 +140,72 @@ std::vector<std::shared_ptr<Obj3D>> Obj3DWriter::file_reader() {
         if (iss >> mesh_nm >> mesh_file) {
             auto obj3d = std::make_shared<Obj3D>();
             obj3d->name = mesh_nm;
-            obj3d->file = mesh_file;
+            obj3d->obj_file = mesh_file;
             objs.push_back(obj3d);
         }
     }
     return objs;
+}
+
+std::unordered_map<std::string, std::shared_ptr<Material>> Obj3DWriter::load_materials(const std::string& mtlFilePath) {
+    std::unordered_map<std::string, std::shared_ptr<Material>> materials;
+    std::ifstream file(mtlFilePath);
+    
+    if (!file.is_open()) {
+        std::cerr << "Error: Could not open MTL file " << mtlFilePath << std::endl;
+        return materials;
+    }
+    
+    // Get directory for texture paths
+    size_t last_slash = mtlFilePath.find_last_of("/\\");
+    std::string directory = (last_slash == std::string::npos) ? "" : mtlFilePath.substr(0, last_slash);
+    
+    std::shared_ptr<Material> current_material;
+    std::string line;
+    
+    while (std::getline(file, line)) {
+        std::istringstream iss(line);
+        std::string prefix;
+        iss >> prefix;
+        
+        if (prefix == "newmtl") {
+            std::string name;
+            iss >> name;
+            current_material = std::make_shared<Material>();
+            current_material->name = name;
+            materials[name] = current_material;
+        }
+        else if (prefix == "Ka" && current_material) {
+            iss >> current_material->ambient.r >> current_material->ambient.g >> current_material->ambient.b;
+        }
+        else if (prefix == "Kd" && current_material) {
+            iss >> current_material->diffuse.r >> current_material->diffuse.g >> current_material->diffuse.b;
+        }
+        else if (prefix == "Ks" && current_material) {
+            iss >> current_material->specular.r >> current_material->specular.g >> current_material->specular.b;
+        }
+        else if (prefix == "Ns" && current_material) {
+            iss >> current_material->shininess;
+        }
+        else if (prefix == "map_Kd" && current_material) {
+            std::string texture_path;
+            iss >> texture_path;
+            texture_path.erase(std::remove(texture_path.begin(), texture_path.end(), '\r'), texture_path.end());
+            current_material->diffuseMap = texture_path;
+            std::cout << "Set diffuse map: " << current_material->diffuseMap << std::endl;
+        }
+        else if (prefix == "map_Ks" && current_material) {
+            std::string texture_path;
+            iss >> texture_path;
+            current_material->specularMap = directory + "/" + texture_path;
+        }
+        else if (prefix == "map_Bump" && current_material) {
+            std::string texture_path;
+            iss >> texture_path;
+            current_material->normalMap = directory + "/" + texture_path;
+        }
+    }
+    
+    file.close();
+    return materials;
 }

@@ -24,7 +24,7 @@ namespace fs = std::filesystem;
 const GLuint WIDTH = 1200, HEIGHT = 800;
 
 // Variáveis globais de controle da câmera
-glm::vec3 cameraPos = glm::vec3(0.0f, 10.0f, 20.0f);
+glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 20.0f);
 glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
 glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 float yaw = -90.0f;
@@ -57,41 +57,80 @@ const GLchar* vertexShaderSource = R"glsl(
     uniform mat4 projection;
     
     out vec3 FragPos;
+    out vec2 TexCoord;
     out vec3 Normal;
     
     void main()
     {
         FragPos = vec3(model * vec4(position, 1.0));
+        TexCoord = texCoord;
         Normal = mat3(transpose(inverse(model))) * normal;
         gl_Position = projection * view * vec4(FragPos, 1.0);
     }
 )glsl";
 
-// Código do Fragment Shader (simplificado)
 const GLchar* fragmentShaderSource = R"glsl(
     #version 450 core
     in vec3 FragPos;
+    in vec2 TexCoord;
     in vec3 Normal;
     out vec4 FragColor;
     
-    uniform vec3 lightPos;
+    struct Material {
+        sampler2D diffuse;
+        sampler2D specular;
+        float shininess;
+        vec3 ambient;
+        vec3 diffuseColor;
+        vec3 specularColor;
+    };
+    
+    struct Light {
+        vec3 position;
+        vec3 ambient;
+        vec3 diffuse;
+        vec3 specular;
+    };
+    
+    uniform Material material;
+    uniform Light light;
     uniform vec3 viewPos;
-    uniform vec3 objectColor;
+    uniform bool useDiffuseTexture;
+    uniform bool useSpecularTexture;
     
     void main()
     {
-        // Luz ambiente
-        float ambientStrength = 0.1;
-        vec3 ambient = ambientStrength * vec3(1.0, 1.0, 1.0);
+        // Ambient
+        vec3 ambient;
+        if(useDiffuseTexture) {
+            ambient = light.ambient * texture(material.diffuse, TexCoord).rgb;
+        } else {
+            ambient = light.ambient * material.ambient;
+        }
         
-        // Luz difusa
+        // Diffuse 
         vec3 norm = normalize(Normal);
-        vec3 lightDir = normalize(lightPos - FragPos);
+        vec3 lightDir = normalize(light.position - FragPos);
         float diff = max(dot(norm, lightDir), 0.0);
-        vec3 diffuse = diff * vec3(1.0, 1.0, 1.0);
+        vec3 diffuse;
+        if(useDiffuseTexture) {
+            diffuse = light.diffuse * diff * texture(material.diffuse, TexCoord).rgb;
+        } else {
+            diffuse = light.diffuse * diff * material.diffuseColor;
+        }
         
-        // Combinação final
-        vec3 result = (ambient + diffuse) * objectColor;
+        // Specular
+        vec3 viewDir = normalize(viewPos - FragPos);
+        vec3 reflectDir = reflect(-lightDir, norm);
+        float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+        vec3 specular;
+        if(useSpecularTexture) {
+            specular = light.specular * spec * texture(material.specular, TexCoord).rgb;
+        } else {
+            specular = light.specular * spec * material.specularColor;
+        }
+        
+        vec3 result = ambient + diffuse + specular;
         FragColor = vec4(result, 1.0);
     }
 )glsl";
@@ -217,6 +256,113 @@ GLuint setup_shader() {
     return shaderProgram;
 }
 
+
+unsigned int loadTextureFromFile(const std::string& filename, const std::string& directory) {
+    std::string fullPath = directory + "/" + filename;
+    
+    // Fix path separators
+    std::replace(fullPath.begin(), fullPath.end(), '\\', '/');
+    
+    std::cout << "Loading texture: " << fullPath << std::endl;
+    
+    unsigned int textureID;
+    glGenTextures(1, &textureID);
+    
+    int width, height, nrComponents;
+    stbi_set_flip_vertically_on_load(true); // Flip textures if needed
+    unsigned char* data = stbi_load(fullPath.c_str(), &width, &height, &nrComponents, 0);
+    if (data) {
+        GLenum format;
+        if (nrComponents == 1)
+            format = GL_RED;
+        else if (nrComponents == 3)
+            format = GL_RGB;
+        else if (nrComponents == 4)
+            format = GL_RGBA;
+        
+        glBindTexture(GL_TEXTURE_2D, textureID);
+        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+        
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        
+        stbi_image_free(data);
+        std::cout << "Texture loaded successfully: " << fullPath << " (" << width << "x" << height << ")" << std::endl;
+    } else {
+        std::cout << "Texture failed to load at path: " << fullPath << std::endl;
+        stbi_image_free(data);
+        return 0;
+    }
+    
+    return textureID;
+}
+
+void setup_material_uniforms(GLuint shaderProgram, const std::shared_ptr<Material>& material, const std::string& textureDirectory) {
+    // Load textures if needed
+    if (material->needs_texture_loading()) {
+        if (!material->diffuseMap.empty() && material->diffuse_texture == 0) {
+            material->diffuse_texture = loadTextureFromFile(material->diffuseMap, textureDirectory);
+            std::cout << "Loaded diffuse texture: " << material->diffuseMap << " ID: " << material->diffuse_texture << std::endl;
+        }
+        if (!material->specularMap.empty() && material->specular_texture == 0) {
+            material->specular_texture = loadTextureFromFile(material->specularMap, textureDirectory);
+            std::cout << "Loaded specular texture: " << material->specularMap << " ID: " << material->specular_texture << std::endl;
+        }
+        if (!material->normalMap.empty() && material->normal_texture == 0) {
+            material->normal_texture = loadTextureFromFile(material->normalMap, textureDirectory);
+            std::cout << "Loaded normal texture: " << material->normalMap << " ID: " << material->normal_texture << std::endl;
+        }
+    }
+    
+    // Set material uniforms - match the names in your shader
+    glUniform1i(glGetUniformLocation(shaderProgram, "useDiffuseTexture"), material->has_diffuse_texture());
+    glUniform1i(glGetUniformLocation(shaderProgram, "useSpecularTexture"), material->has_specular_texture());
+    
+    if (material->has_diffuse_texture()) {
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, material->diffuse_texture);
+        glUniform1i(glGetUniformLocation(shaderProgram, "material.diffuse"), 0);
+        // Also set color fallbacks
+        glUniform3f(glGetUniformLocation(shaderProgram, "material.diffuseColor"), 
+                   1.0f, 1.0f, 1.0f); // White when using texture
+    } else {
+        glUniform3f(glGetUniformLocation(shaderProgram, "material.diffuseColor"), 
+                   material->diffuse.r, material->diffuse.g, material->diffuse.b);
+    }
+    
+    if (material->has_specular_texture()) {
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, material->specular_texture);
+        glUniform1i(glGetUniformLocation(shaderProgram, "material.specular"), 1);
+        glUniform3f(glGetUniformLocation(shaderProgram, "material.specularColor"), 
+                   1.0f, 1.0f, 1.0f); // White when using texture
+    } else {
+        glUniform3f(glGetUniformLocation(shaderProgram, "material.specularColor"), 
+                   material->specular.r, material->specular.g, material->specular.b);
+    }
+    
+    // Set ambient and shininess
+    glUniform3f(glGetUniformLocation(shaderProgram, "material.ambient"), 
+               material->ambient.r, material->ambient.g, material->ambient.b);
+    glUniform1f(glGetUniformLocation(shaderProgram, "material.shininess"), material->shininess);
+}
+
+void setup_light_uniforms(GLuint shaderProgram, glm::vec3 lightPos) {
+    // Light properties
+    glm::vec3 lightColor = glm::vec3(1.0f);
+    glm::vec3 ambientLight = lightColor * 0.1f;
+    glm::vec3 diffuseLight = lightColor * 0.8f;
+    glm::vec3 specularLight = lightColor * 1.0f;
+    
+    glUniform3f(glGetUniformLocation(shaderProgram, "light.position"), lightPos.x, lightPos.y, lightPos.z);
+    glUniform3f(glGetUniformLocation(shaderProgram, "light.ambient"), ambientLight.r, ambientLight.g, ambientLight.b);
+    glUniform3f(glGetUniformLocation(shaderProgram, "light.diffuse"), diffuseLight.r, diffuseLight.g, diffuseLight.b);
+    glUniform3f(glGetUniformLocation(shaderProgram, "light.specular"), specularLight.r, specularLight.g, specularLight.b);
+}
+
 void error_log(int cod, const char * description) {
     std::cout << "GLFW Error (" << cod << "): " << description << std::endl;
 }
@@ -263,8 +409,8 @@ int main() {
     shaderID = setup_shader();
 
     //STARTUP LOGIC
-    cameraPos = glm::vec3(0.0f, 10.0f, 0.0f); 
-    cameraFront = glm::vec3(0.0f, -50.0f, -1.0f);
+    //cameraPos = glm::vec3(0.0f, 10.0f, 0.0f); 
+    //cameraFront = glm::vec3(0.0f, -50.0f, -1.0f);
     current_scene = std::make_unique<Scene>();
     for (auto obj : Obj3DWriter::file_reader())
     {
@@ -285,25 +431,33 @@ int main() {
         
         glUseProgram(shaderID);
         
+        glm::vec3 light_position(0.0f,10.0f,0.0f);
+
         GLuint lightPosLoc = glGetUniformLocation(shaderID, "lightPos");
-        glUniform3f(lightPosLoc, 10.0f, 10.0f, 10.0f);
+        glUniform3f(lightPosLoc, light_position.x, light_position.y, light_position.z);
         
         GLuint objectColorLoc = glGetUniformLocation(shaderID, "objectColor");
         glUniform3f(objectColorLoc, 0.8f, 0.8f, 0.8f);
 
+        
+
         specify_view();
         specify_projection();
+        setup_light_uniforms(shaderID, light_position);
 
         GLuint loc = glGetUniformLocation(shaderID, "model");
         
         for (auto obj : current_scene->objects) {
-            //translate object for visual test
-            //obj->transform = glm::translate(obj->transform, glm::vec3(0,0.1,0));
             if (loc != -1) {
                 glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(obj->transform));
             }
+            obj->transform = glm::rotate(obj->transform, 0.01f, glm::vec3(1.0));
             
             for (auto group : obj->mesh->groups) {
+                if (group->material){
+                    std::string directory = obj->obj_file.substr(0, obj->obj_file.find_last_of("/\\"));
+                    setup_material_uniforms(shaderID, group->material, directory);
+                }
                 glBindVertexArray(group->VAO);
                 glDrawArrays(GL_TRIANGLES, 0, group->vert_count);
             }

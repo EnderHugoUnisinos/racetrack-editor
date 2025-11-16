@@ -8,7 +8,7 @@ private:
 
 public:
     std::string name;
-    std::string file;
+    std::string obj_file;
     glm::mat4 transform;
     std::shared_ptr<Mesh> mesh;
     
@@ -16,4 +16,5 @@ public:
     Obj3D() : buffers_created(false), mesh(nullptr), transform(glm::mat4(1.0f)) {}
     
     void setup_buffers();
+    void load_textures(const std::string& directory);
 };

@@ -16,7 +16,5 @@ public:
     
     void update(float delta_time);
 
-    void render(GLuint& shaderProgram) const;
     void cleanup();
-    void unload_scene();
 };
