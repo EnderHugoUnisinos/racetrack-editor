@@ -11,18 +11,22 @@
 
 #include "obj3dwriter.h"
 
-void Obj3DWriter::write(Obj3D*obj){
-    Mesh* mesh = load_from_file(obj->file);
+void Obj3DWriter::write(std::shared_ptr<Obj3D> obj){
+    std::shared_ptr<Mesh> mesh = load_from_file(obj->file);
     obj->mesh = mesh;
     obj->setup_buffers();
 };
 
-Mesh* Obj3DWriter::load_from_file(const std::string& filename){
+std::shared_ptr<Mesh> Obj3DWriter::load_from_file(const std::string& filename){
     
-    Mesh* mesh = new Mesh;
+    std::shared_ptr<Mesh> mesh = std::make_shared<Mesh>();
     std::ifstream file(filename);
-    mesh->groups.push_back(new Group("Default"));
-    Group* group = mesh->groups[0];
+    if (!file.is_open()) {
+        std::cerr << "Error: Could not open file " << filename << std::endl;
+        return nullptr;
+    }
+    mesh->groups.push_back(std::make_shared<Group>("Default"));
+    std::shared_ptr<Group> group = mesh->groups[0];
 
     if (!file.is_open()) {
         std::cerr << "Error: Could not open file " << filename << std::endl;
@@ -53,7 +57,7 @@ Mesh* Obj3DWriter::load_from_file(const std::string& filename){
             iss >> name;
             if (!name.empty()) {
                 currentGroup = name;
-                mesh->groups.push_back(new Group(currentGroup));
+                mesh->groups.push_back(std::make_shared<Group>(currentGroup));
                 group = mesh->groups[mesh->groups.size() - 1];
             }
         }
@@ -77,7 +81,7 @@ Mesh* Obj3DWriter::load_from_file(const std::string& filename){
         }
         else if (prefix == "f") {
             // face
-            Face* face = new Face;
+            std::shared_ptr<Face> face = std::make_shared<Face>();
             std::string vertexData;
             
             while (iss >> vertexData) {
@@ -106,9 +110,9 @@ Mesh* Obj3DWriter::load_from_file(const std::string& filename){
 }
 
 
-std::vector<Obj3D*> Obj3DWriter::file_reader() {
+std::vector<std::shared_ptr<Obj3D>> Obj3DWriter::file_reader() {
     std::string path = "../objs/config.cfg";
-    std::vector<Obj3D*> objs;
+    std::vector<std::shared_ptr<Obj3D>> objs;
     
     std::ifstream arq(path);
     if (!arq.is_open()) {
@@ -125,11 +129,11 @@ std::vector<Obj3D*> Obj3DWriter::file_reader() {
         std::string mesh_file;
         
         if (iss >> mesh_nm >> mesh_file) {
-            Obj3D *obj3d = new Obj3D;
+            auto obj3d = std::make_shared<Obj3D>();
             obj3d->name = mesh_nm;
             obj3d->file = mesh_file;
             objs.push_back(obj3d);
         }
     }
     return objs;
-};
+}

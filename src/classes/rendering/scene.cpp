@@ -10,7 +10,7 @@
 
 #include "scene.h"
 
-void Scene::add_object(Obj3D* object){
+void Scene::add_object(std::shared_ptr<Obj3D> object){
     objects.push_back(object);
 }
 void Scene::remove_object(int index) { 

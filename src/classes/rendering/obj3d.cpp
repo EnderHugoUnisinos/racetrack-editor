@@ -14,29 +14,38 @@
 void Obj3D::setup_buffers(){
     if (buffers_created) return;
 
-    for (auto *group : mesh->groups) {
+    for (auto group : mesh->groups) {
         std::vector<float> interleaved_data;
 
-        for (auto& face : group->faces){
-            int n;
-            for (int i = 0; i < face->verts.size(); i++){
-                glm::vec3& v = mesh->verts[face->verts[i]];
-                interleaved_data.push_back(v.x);
-                interleaved_data.push_back(v.y);
-                interleaved_data.push_back(v.z);
+        // Use the processed vertex data directly
+        for (size_t i = 0; i < mesh->verts.size(); i++) {
+            // Position
+            interleaved_data.push_back(mesh->verts[i].x);
+            interleaved_data.push_back(mesh->verts[i].y);
+            interleaved_data.push_back(mesh->verts[i].z);
 
-                glm::vec2& vt = mesh->mappings[face->textures[i]];
-                interleaved_data.push_back(vt.x);
-                interleaved_data.push_back(vt.y);
-                glm::vec3& vn = mesh->normals[face->normals[i]];
-                interleaved_data.push_back(vn.x);
-                interleaved_data.push_back(vn.y);
-                interleaved_data.push_back(vn.z);
-                n++;
+            // Texture coordinates (if available)
+            if (i < mesh->mappings.size()) {
+                interleaved_data.push_back(mesh->mappings[i].x);
+                interleaved_data.push_back(mesh->mappings[i].y);
+            } else {
+                interleaved_data.push_back(0.0f);
+                interleaved_data.push_back(0.0f);
+            }
+
+            // Normals (if available)
+            if (i < mesh->normals.size()) {
+                interleaved_data.push_back(mesh->normals[i].x);
+                interleaved_data.push_back(mesh->normals[i].y);
+                interleaved_data.push_back(mesh->normals[i].z);
+            } else {
+                interleaved_data.push_back(0.0f);
+                interleaved_data.push_back(1.0f);
+                interleaved_data.push_back(0.0f);
             }
         }
 
-       // Generate VAO and single VBO for interleaved data
+        // Generate VAO and VBO
         glGenVertexArrays(1, &group->VAO);
         glGenBuffers(1, &group->VBO);
 
@@ -45,24 +54,24 @@ void Obj3D::setup_buffers(){
         glBufferData(GL_ARRAY_BUFFER, interleaved_data.size() * sizeof(float), 
                      interleaved_data.data(), GL_STATIC_DRAW);
 
-        // Set up vertex attributes with strides
-        // Position (attribute 0)
+        // Set up vertex attributes
+        // Position
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
         
-        // Texture coordinates (attribute 1)  
+        // Texture coordinates  
         glEnableVertexAttribArray(1);
         glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), 
                              (void*)(3 * sizeof(float)));
         
-        // Normals (attribute 2)
+        // Normals
         glEnableVertexAttribArray(2);
         glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), 
                              (void*)(5 * sizeof(float)));
 
         glBindVertexArray(0);
         
-        group->vert_count = interleaved_data.size() / 8; // 8 floats per vertex
+        group->vert_count = mesh->verts.size();
     }
     buffers_created = true;
 };

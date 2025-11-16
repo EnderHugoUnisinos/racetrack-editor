@@ -19,8 +19,8 @@ public:
     Group(const std::string& group_name = ""): name(group_name), VAO(0), VBO(0) {};
 
     std::string name;
-    std::vector<Face*> faces;
-    Material *material;
+    std::vector<std::shared_ptr<Face>> faces;
+    std::shared_ptr<Material> material;
     int vert_count;
     
     GLuint VAO;

@@ -14,6 +14,6 @@ public:
     std::vector<glm::vec3> verts;
     std::vector<glm::vec2> mappings;
     std::vector<glm::vec3> normals;
-    std::vector<Group*> groups;
+    std::vector<std::shared_ptr<Group>> groups;
     void process_data();
 };

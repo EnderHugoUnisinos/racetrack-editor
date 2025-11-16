@@ -24,7 +24,7 @@ namespace fs = std::filesystem;
 const GLuint WIDTH = 1200, HEIGHT = 800;
 
 // Variáveis globais de controle da câmera
-glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 20.0f);
+glm::vec3 cameraPos = glm::vec3(0.0f, 2.0f, 0.0f);
 glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
 glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 float yaw = -90.0f;
@@ -97,7 +97,7 @@ const GLchar* fragmentShaderSource = R"glsl(
 )glsl";
 #pragma endregion
 
-Scene* current_scene;
+std::unique_ptr<Scene> current_scene = std::make_unique<Scene>();
 int currentObjectIndex;
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
@@ -249,7 +249,7 @@ int main() {
     glfwSetErrorCallback(error_log);
     glfwSetKeyCallback(window, key_callback);
 
-    //glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     glViewport(0, 0, WIDTH, HEIGHT);
     glEnable(GL_DEPTH_TEST);
@@ -259,8 +259,8 @@ int main() {
     shaderID = setup_shader();
 
     //STARTUP LOGIC
-    current_scene = new Scene;
-    for (Obj3D* obj : Obj3DWriter::file_reader())
+    current_scene = std::make_unique<Scene>();
+    for (auto obj : Obj3DWriter::file_reader())
     {
         current_scene->add_object(obj);
         Obj3DWriter::write(obj);
@@ -289,11 +289,13 @@ int main() {
         specify_projection();
 
         GLuint loc = glGetUniformLocation(shaderID, "model");
-
+        
         for (auto obj : current_scene->objects) {
-            glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(obj->transform));
+            if (loc != -1) {
+                glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(obj->transform));
+            }
             
-            for (auto *group : obj->mesh->groups) {
+            for (auto group : obj->mesh->groups) {
                 glBindVertexArray(group->VAO);
                 glDrawArrays(GL_TRIANGLES, 0, group->vert_count);
             }
@@ -303,6 +305,7 @@ int main() {
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
+    current_scene->cleanup();
     glfwTerminate();
     return 0;
 }
