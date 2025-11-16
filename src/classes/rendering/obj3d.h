@@ -11,7 +11,11 @@ public:
     std::string name;
     std::string file;
     glm::mat4 transform;
-    Mesh* mesh;
+    std::shared_ptr<Mesh> mesh;
+    
+    // Add constructor
+    Obj3D() : buffers_created(false), mesh(nullptr), transform(glm::mat4(1.0f)) {}
+    
     void setup_buffers();
 };
 #endif

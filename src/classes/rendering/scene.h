@@ -7,9 +7,9 @@
 
 class Scene{
 public:
-    std::vector<Obj3D*> objects;
+    std::vector<std::shared_ptr<Obj3D>> objects;
 
-    void add_object(Obj3D* object);
+    void add_object(std::shared_ptr<Obj3D> object);
     void remove_object(int index);
     
     void update(float delta_time);
