@@ -109,7 +109,6 @@ std::shared_ptr<Mesh> Obj3DWriter::load_from_file(const std::string& filename){
     return mesh;
 }
 
-
 std::vector<std::shared_ptr<Obj3D>> Obj3DWriter::file_reader() {
     std::string path = "../objs/config.cfg";
     std::vector<std::shared_ptr<Obj3D>> objs;

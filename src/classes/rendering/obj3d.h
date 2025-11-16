@@ -1,5 +1,4 @@
-#ifndef OBJ3D_H
-#define OBJ3D_H
+#pragma once
 
 #include "mesh.h"
 
@@ -18,4 +17,3 @@ public:
     
     void setup_buffers();
 };
-#endif

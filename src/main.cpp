@@ -24,7 +24,7 @@ namespace fs = std::filesystem;
 const GLuint WIDTH = 1200, HEIGHT = 800;
 
 // Variáveis globais de controle da câmera
-glm::vec3 cameraPos = glm::vec3(0.0f, 2.0f, 0.0f);
+glm::vec3 cameraPos = glm::vec3(0.0f, 10.0f, 20.0f);
 glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
 glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 float yaw = -90.0f;
@@ -104,7 +104,7 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
 }
 
-void mouse_callback(GLFWwindow* window, double xpos, double ypos) {
+void first_person(double xpos, double ypos){
     if (firstMouse) {
         lastX = xpos;
         lastY = ypos;
@@ -130,6 +130,10 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos) {
     front.y = sin(glm::radians(pitch));
     front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
     cameraFront = glm::normalize(front);
+}
+
+void mouse_callback(GLFWwindow* window, double xpos, double ypos) {
+    first_person(xpos, ypos);
 }
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
@@ -259,6 +263,8 @@ int main() {
     shaderID = setup_shader();
 
     //STARTUP LOGIC
+    cameraPos = glm::vec3(0.0f, 10.0f, 0.0f); 
+    cameraFront = glm::vec3(0.0f, -50.0f, -1.0f);
     current_scene = std::make_unique<Scene>();
     for (auto obj : Obj3DWriter::file_reader())
     {
@@ -291,6 +297,8 @@ int main() {
         GLuint loc = glGetUniformLocation(shaderID, "model");
         
         for (auto obj : current_scene->objects) {
+            //translate object for visual test
+            //obj->transform = glm::translate(obj->transform, glm::vec3(0,0.1,0));
             if (loc != -1) {
                 glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(obj->transform));
             }
