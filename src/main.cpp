@@ -10,8 +10,8 @@
 #include <sstream>
 #include <filesystem>
 
-#include "classes/rendering/scene.h"
-#include "classes/rendering/obj3dwriter.h"
+#include "classes/rendering/3D/scene.h"
+#include "classes/rendering/3D/obj3dwriter.h"
 
 // STB_IMAGE
 #define STB_IMAGE_IMPLEMENTATION
@@ -139,6 +139,9 @@ const GLchar* fragmentShaderSource = R"glsl(
 std::unique_ptr<Scene> current_scene = std::make_unique<Scene>();
 int currentObjectIndex;
 
+// 0 = track editor / 1 = 3D model viewer
+int current_mode = 0;
+
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
 }
@@ -171,15 +174,21 @@ void first_person(double xpos, double ypos){
     cameraFront = glm::normalize(front);
 }
 
+void track_editor(double xpos, double ypos){
+
+}
+
 void mouse_callback(GLFWwindow* window, double xpos, double ypos) {
-    first_person(xpos, ypos);
+    if (current_mode == 0) {
+        track_editor(xpos, ypos);
+    }
+    else if (current_mode == 1)
+    {
+        first_person(xpos, ypos);
+    }
 }
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
-    if (fov >= 1.0f && fov <= 120.0f)
-        fov -= yoffset;
-    if (fov <= 1.0f) fov = 1.0f;
-    if (fov >= 120.0f) fov = 120.0f;
 }
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -257,7 +266,7 @@ GLuint setup_shader() {
 }
 
 
-unsigned int loadTextureFromFile(const std::string& filename, const std::string& directory) {
+unsigned int load_texture_from_file(const std::string& filename, const std::string& directory) {
     std::string fullPath = directory + "/" + filename;
     
     // Fix path separators
@@ -304,15 +313,15 @@ void setup_material_uniforms(GLuint shaderProgram, const std::shared_ptr<Materia
     // Load textures if needed
     if (material->needs_texture_loading()) {
         if (!material->diffuseMap.empty() && material->diffuse_texture == 0) {
-            material->diffuse_texture = loadTextureFromFile(material->diffuseMap, textureDirectory);
+            material->diffuse_texture = load_texture_from_file(material->diffuseMap, textureDirectory);
             std::cout << "Loaded diffuse texture: " << material->diffuseMap << " ID: " << material->diffuse_texture << std::endl;
         }
         if (!material->specularMap.empty() && material->specular_texture == 0) {
-            material->specular_texture = loadTextureFromFile(material->specularMap, textureDirectory);
+            material->specular_texture = load_texture_from_file(material->specularMap, textureDirectory);
             std::cout << "Loaded specular texture: " << material->specularMap << " ID: " << material->specular_texture << std::endl;
         }
         if (!material->normalMap.empty() && material->normal_texture == 0) {
-            material->normal_texture = loadTextureFromFile(material->normalMap, textureDirectory);
+            material->normal_texture = load_texture_from_file(material->normalMap, textureDirectory);
             std::cout << "Loaded normal texture: " << material->normalMap << " ID: " << material->normal_texture << std::endl;
         }
     }
@@ -451,7 +460,9 @@ int main() {
             if (loc != -1) {
                 glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(obj->transform));
             }
-            obj->transform = glm::rotate(obj->transform, 0.01f, glm::vec3(1.0));
+
+            //object rotation for testing
+            //obj->transform = glm::rotate(obj->transform, 0.01f, glm::vec3(1.0));
             
             for (auto group : obj->mesh->groups) {
                 if (group->material){

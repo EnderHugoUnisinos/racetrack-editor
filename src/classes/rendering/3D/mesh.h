@@ -16,6 +16,9 @@ public:
     std::vector<glm::vec3> verts;
     std::vector<glm::vec2> mappings;
     std::vector<glm::vec3> normals;
+    std::vector<glm::vec3> processed_verts;
+    std::vector<glm::vec2> processed_mappings;
+    std::vector<glm::vec3> processed_normals;
     std::vector<std::shared_ptr<Group>> groups;
     std::vector<std::string> mtl_files;
     void process_data();

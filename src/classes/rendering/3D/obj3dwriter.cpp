@@ -12,6 +12,24 @@
 
 #include "obj3dwriter.h"
 
+std::string find_texture_file(const std::string& directory, const std::string& baseName) {
+    std::vector<std::string> extensions = {".png", ".jpg", ".jpeg", ".bmp", ".tga", ".tiff"};
+    
+    for (const auto& ext : extensions) {
+        std::string fullPath = directory + "/" + baseName + ext;
+        if (std::filesystem::exists(fullPath)) {
+            return baseName + ext;
+        }
+    }
+    
+    std::string fullPath = directory + "/" + baseName;
+    if (std::filesystem::exists(fullPath)) {
+        return baseName;
+    }
+    
+    return baseName;
+}
+
 void Obj3DWriter::write(std::shared_ptr<Obj3D> obj){
     std::shared_ptr<Mesh> mesh = load_from_file(obj->obj_file);
     obj->mesh = mesh;
@@ -191,18 +209,20 @@ std::unordered_map<std::string, std::shared_ptr<Material>> Obj3DWriter::load_mat
             std::string texture_path;
             iss >> texture_path;
             texture_path.erase(std::remove(texture_path.begin(), texture_path.end(), '\r'), texture_path.end());
-            current_material->diffuseMap = texture_path;
+            current_material->diffuseMap = find_texture_file(directory, texture_path);
             std::cout << "Set diffuse map: " << current_material->diffuseMap << std::endl;
         }
         else if (prefix == "map_Ks" && current_material) {
             std::string texture_path;
             iss >> texture_path;
-            current_material->specularMap = directory + "/" + texture_path;
+            texture_path.erase(std::remove(texture_path.begin(), texture_path.end(), '\r'), texture_path.end());
+            current_material->specularMap = find_texture_file(directory, texture_path);
         }
         else if (prefix == "map_Bump" && current_material) {
             std::string texture_path;
             iss >> texture_path;
-            current_material->normalMap = directory + "/" + texture_path;
+            texture_path.erase(std::remove(texture_path.begin(), texture_path.end(), '\r'), texture_path.end());
+            current_material->normalMap = find_texture_file(directory, texture_path);
         }
     }
     

@@ -18,26 +18,26 @@ void Obj3D::setup_buffers(){
         std::vector<float> interleaved_data;
 
         // Use the processed vertex data directly
-        for (size_t i = 0; i < mesh->verts.size(); i++) {
+        for (size_t i = 0; i < mesh->processed_verts.size(); i++) {
             // Position
-            interleaved_data.push_back(mesh->verts[i].x);
-            interleaved_data.push_back(mesh->verts[i].y);
-            interleaved_data.push_back(mesh->verts[i].z);
+            interleaved_data.push_back(mesh->processed_verts[i].x);
+            interleaved_data.push_back(mesh->processed_verts[i].y);
+            interleaved_data.push_back(mesh->processed_verts[i].z);
 
             // Texture coordinates (if available)
-            if (i < mesh->mappings.size()) {
-                interleaved_data.push_back(mesh->mappings[i].x);
-                interleaved_data.push_back(mesh->mappings[i].y);
+            if (i < mesh->processed_mappings.size()) {
+                interleaved_data.push_back(mesh->processed_mappings[i].x);
+                interleaved_data.push_back(mesh->processed_mappings[i].y);
             } else {
                 interleaved_data.push_back(0.0f);
                 interleaved_data.push_back(0.0f);
             }
 
             // Normals (if available)
-            if (i < mesh->normals.size()) {
-                interleaved_data.push_back(mesh->normals[i].x);
-                interleaved_data.push_back(mesh->normals[i].y);
-                interleaved_data.push_back(mesh->normals[i].z);
+            if (i < mesh->processed_normals.size()) {
+                interleaved_data.push_back(mesh->processed_normals[i].x);
+                interleaved_data.push_back(mesh->processed_normals[i].y);
+                interleaved_data.push_back(mesh->processed_normals[i].z);
             } else {
                 interleaved_data.push_back(0.0f);
                 interleaved_data.push_back(1.0f);
@@ -71,7 +71,7 @@ void Obj3D::setup_buffers(){
 
         glBindVertexArray(0);
         
-        group->vert_count = mesh->verts.size();
+        group->vert_count = mesh->processed_verts.size();
     }
     buffers_created = true;
 };
