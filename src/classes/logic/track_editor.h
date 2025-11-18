@@ -4,30 +4,22 @@
 #include <glm/glm.hpp>
 #include <string>
 #include "../rendering/2D/bcurve.h"
+#include "../rendering/3D/mesh.h"
 
 class TrackEditor {
-private:
-    std::vector<glm::vec2> controlPoints;
-    BSpline centerSpline;
-    float trackWidth;
-    bool isEditing;
-
 public:
-    TrackEditor(float width = 5.0f) : trackWidth(width), isEditing(true) {}
+    std::vector<glm::vec2> control_points;
+    BSpline center_spline;
+    float track_width;
+    bool is_editing;
 
-    void addControlPoint(const glm::vec2& point);
-    void clearControlPoints();
-    std::vector<glm::vec2> getControlPoints() const { return controlPoints; }
+    TrackEditor(float width = 1.0f) : track_width(width), is_editing(true) {}
+
+    void add_control_point(const glm::vec2& point);
+    void clear_control_points();
     
-    void generateTrackMesh(std::vector<glm::vec3>& vertices, 
-                          std::vector<glm::vec2>& texCoords,
-                          std::vector<glm::vec3>& normals,
-                          std::vector<unsigned int>& indices);
+    void generate_track_mesh(std::shared_ptr<Mesh>);
     
-    void exportTrackOBJ(const std::string& filename);
-    void exportAnimationFile(const std::string& filename);
-    
-    void setEditing(bool editing) { isEditing = editing; }
-    bool getEditing() const { return isEditing; }
-    void setTrackWidth(float width) { trackWidth = width; }
+    void export_track_OBJ(const std::string& filename);
+    void export_animation_file(const std::string& filename);
 };

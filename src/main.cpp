@@ -10,8 +10,9 @@
 #include <sstream>
 #include <filesystem>
 
+#include "classes/logic/track_editor.h"
 #include "classes/rendering/3D/scene.h"
-#include "classes/rendering/3D/obj3dwriter.h"
+#include "classes/logic/obj3dwriter.h"
 
 // STB_IMAGE
 #define STB_IMAGE_IMPLEMENTATION
@@ -139,6 +140,9 @@ const GLchar* fragmentShaderSource = R"glsl(
 std::unique_ptr<Scene> current_scene = std::make_unique<Scene>();
 int currentObjectIndex;
 
+std::unique_ptr<TrackEditor> trackEditor = std::make_unique<TrackEditor>();
+std::shared_ptr<Obj3D> current_track = std::make_shared<Obj3D>();
+
 // 0 = track editor / 1 = 3D model viewer
 int current_mode = 0;
 
@@ -174,8 +178,154 @@ void first_person(double xpos, double ypos){
     cameraFront = glm::normalize(front);
 }
 
-void track_editor(double xpos, double ypos){
+void update_track_preview() {
+    if (!current_track->mesh) {
+        current_track->mesh = std::make_shared<Mesh>();
+    }
+    trackEditor->generate_track_mesh(current_track->mesh);
+    current_track->buffers_created = false;
+    current_track->setup_buffers();
 
+    auto it = std::find(current_scene->objects.begin(), current_scene->objects.end(), current_track);
+    if (it == current_scene->objects.end()) {
+        current_scene->add_object(current_track);
+        std::cout << "Added track to scene" << std::endl;
+    }
+}
+
+/*
+void updateTrackPreview() {
+    // Generate track mesh
+    std::vector<glm::vec3> vertices;
+    std::vector<glm::vec2> texCoords;
+    std::vector<glm::vec3> normals;
+    std::vector<unsigned int> indices;
+    
+    trackEditor->generateTrackMesh(vertices, texCoords, normals, indices);
+    
+    if (vertices.empty() || indices.empty()) {
+        std::cout << "No valid track mesh generated" << std::endl;
+        return;
+    }
+    
+    std::cout << "Updating track preview with " << vertices.size() << " vertices and " 
+              << indices.size() << " indices" << std::endl;
+    
+    // Create or update track preview object
+    if (!current_track) {
+        current_track = std::make_shared<Obj3D>();
+        current_track->name = "TrackPreview";
+        current_track->mesh = std::make_shared<Mesh>();
+    }
+    
+    // Clear existing groups and create new one
+    current_track->mesh->groups.clear();
+    auto group = std::make_shared<Group>("Track");
+    
+    // Create material
+    auto material = std::make_shared<Material>();
+    material->name = "TrackMaterial";
+    material->diffuse = glm::vec3(0.2f, 0.6f, 0.2f);
+    material->ambient = glm::vec3(0.1f, 0.3f, 0.1f);
+    material->specular = glm::vec3(0.1f, 0.1f, 0.1f);
+    material->shininess = 32.0f;
+    group->material = material;
+    
+    // Convert generated mesh to Face format
+    // Create faces from triangles (3 indices per face)
+    for (size_t i = 0; i < indices.size(); i += 3) {
+        auto face = std::make_shared<Face>();
+        
+        // Add the three vertices of this triangle
+        face->verts.push_back(indices[i] + 1);
+        face->verts.push_back(indices[i + 1] + 1);
+        face->verts.push_back(indices[i + 2] + 1);
+        
+        // Use the same indices for texture coordinates and normals
+        face->textures.push_back(indices[i] + 1);
+        face->textures.push_back(indices[i + 1] + 1);
+        face->textures.push_back(indices[i + 2] + 1);
+        
+        face->normals.push_back(indices[i] + 1);
+        face->normals.push_back(indices[i + 1] + 1);
+        face->normals.push_back(indices[i + 2] + 1);
+        
+        group->faces.push_back(face);
+    }
+    
+    current_track->mesh->groups.push_back(group);
+    
+    // Set the raw vertex data
+    current_track->mesh->verts = vertices;
+    current_track->mesh->mappings = texCoords;
+    current_track->mesh->normals = normals;
+    
+    // Process the data to create the interleaved buffers
+    current_track->mesh->process_data();
+    
+    // Force buffer recreation
+    current_track->setup_buffers();
+    
+    // Add to scene if not already there
+    auto it = std::find(current_scene->objects.begin(), current_scene->objects.end(), current_track);
+    if (it == current_scene->objects.end()) {
+        current_scene->add_object(current_track);
+        std::cout << "Added track preview to scene" << std::endl;
+    } else {
+        std::cout << "Updated existing track preview in scene" << std::endl;
+    }
+}
+/**/
+
+void track_editor(double xpos, double ypos) {
+    // Store mouse position for click handling
+    static double lastClickX = 0, lastClickY = 0;
+    lastClickX = xpos;
+    lastClickY = ypos;
+}
+
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
+    if (current_mode == 0 && button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+        double xpos, ypos;
+        glfwGetCursorPos(window, &xpos, &ypos);
+        
+        // Convert screen coordinates to normalized device coordinates
+        float ndcX = (2.0f * xpos) / WIDTH - 1.0f;
+        float ndcY = 1.0f - (2.0f * ypos) / HEIGHT;
+        
+        // Create a ray in world coordinates using inverse matrices
+        glm::vec4 rayClip = glm::vec4(ndcX, ndcY, -1.0f, 1.0f);
+        
+        // Get projection and view matrices
+        glm::mat4 projection = glm::perspective(glm::radians(fov), (float)WIDTH / HEIGHT, 0.1f, 100.0f);
+        glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+        
+        // Convert to eye coordinates
+        glm::mat4 invProjection = glm::inverse(projection);
+        glm::vec4 rayEye = invProjection * rayClip;
+        rayEye = glm::vec4(rayEye.x, rayEye.y, -1.0f, 0.0f);
+        
+        // Convert to world coordinates
+        glm::mat4 invView = glm::inverse(view);
+        glm::vec4 rayWorld = invView * rayEye;
+        glm::vec3 rayDir = glm::normalize(glm::vec3(rayWorld));
+        
+        // Calculate intersection with ground plane (y = 0)
+        // Ray equation: P = cameraPos + t * rayDir
+        // We want Py = 0, so: cameraPos.y + t * rayDir.y = 0
+        if (fabs(rayDir.y) > 0.0001f) {
+            float t = -cameraPos.y / rayDir.y;
+            glm::vec3 worldPos = cameraPos + t * rayDir;
+            
+            // Add control point at ground level
+            trackEditor->add_control_point(glm::vec2(worldPos.x, worldPos.z));
+            std::cout << "Added control point at: " << worldPos.x << ", " << worldPos.z << std::endl;
+            
+            if (trackEditor->control_points.size() >= 4) {
+                update_track_preview();
+            }
+        }
+    }
 }
 
 void mouse_callback(GLFWwindow* window, double xpos, double ypos) {
@@ -193,6 +343,40 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
+    if (action == GLFW_PRESS) {
+        if (key == GLFW_KEY_TAB) {
+            // Switch between modes
+            current_mode = (current_mode + 1) % 2;
+            if (current_mode == 0) {
+                glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            } else {
+                glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+                firstMouse = true;
+            }
+        }
+        else if (key == GLFW_KEY_E && current_mode == 0) {
+            // Export track
+            trackEditor->export_track_OBJ("../objs/track/exported_track.obj");
+            //trackEditor->export_animation_file("../objs/track/animation_path.txt");
+            std::cout << "Track exported!" << std::endl;
+        }
+        else if (key == GLFW_KEY_BACKSPACE && current_mode == 0) {
+            //IF BACKSPACE REMOVE LAST CONTROL POINT
+        }
+        else if (key == GLFW_KEY_C && current_mode == 0) {
+            // Clear control points
+            trackEditor->clear_control_points();
+            if (current_track) {
+                auto it = std::find(current_scene->objects.begin(), current_scene->objects.end(), current_track);
+                if (it != current_scene->objects.end()) {
+                    current_scene->objects.erase(it);
+                }
+            }
+        }
+        else if (key == GLFW_KEY_ENTER && current_mode == 0) {
+            //IF ENTER MAKE TRACK UN-EDITABLE
+        }
+    }
 }
 
 void processInput(GLFWwindow* window) {
@@ -265,6 +449,112 @@ GLuint setup_shader() {
     return shaderProgram;
 }
 
+void setupPointBuffers(GLuint& VAO, GLuint& VBO) {
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+    
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+    glEnableVertexAttribArray(0);
+    
+    glBindVertexArray(0);
+}
+
+GLuint setupPointShader() {
+    const GLchar* pointVertexShader = R"glsl(
+        #version 450 core
+        layout (location = 0) in vec3 position;
+        uniform mat4 view;
+        uniform mat4 projection;
+        void main() {
+            gl_Position = projection * view * vec4(position, 1.0);
+            gl_PointSize = 12.0;
+        }
+    )glsl";
+    
+    const GLchar* pointFragmentShader = R"glsl(
+        #version 450 core
+        out vec4 FragColor;
+        void main() {
+            // Draw smooth circular points with border
+            vec2 coord = gl_PointCoord - vec2(0.5);
+            float dist = length(coord);
+            
+            if(dist > 0.5)
+                discard;
+                
+            // White fill with black border
+            if(dist > 0.4) {
+                FragColor = vec4(0.0, 0.0, 0.0, 1.0); // Black border
+            } else {
+                FragColor = vec4(1.0, 1.0, 1.0, 1.0); // White fill
+            }
+        }
+    )glsl";
+    
+    GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertexShader, 1, &pointVertexShader, nullptr);
+    glCompileShader(vertexShader);
+    
+    GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragmentShader, 1, &pointFragmentShader, nullptr);
+    glCompileShader(fragmentShader);
+    
+    GLuint shaderProgram = glCreateProgram();
+    glAttachShader(shaderProgram, vertexShader);
+    glAttachShader(shaderProgram, fragmentShader);
+    glLinkProgram(shaderProgram);
+    
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+    
+    return shaderProgram;
+}
+
+void renderControlPoints() {
+    //if (current_mode != 0) return;
+    
+    auto controlPoints = trackEditor->control_points;
+    if (controlPoints.empty()) return;
+    
+    // Create a simple shader for points
+    static GLuint pointShader = 0;
+    static GLuint pointVAO = 0, pointVBO = 0;
+    
+    // Initialize on first call
+    if (pointShader == 0) {
+        pointShader = setupPointShader();
+    }
+    if (pointVAO == 0) {
+        setupPointBuffers(pointVAO, pointVBO);
+    }
+    
+    glUseProgram(pointShader);
+    
+    // Set matrices for point shader
+    glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+    glm::mat4 projection = glm::perspective(glm::radians(fov), (float)WIDTH / HEIGHT, 0.1f, 100.0f);
+    
+    glUniformMatrix4fv(glGetUniformLocation(pointShader, "view"), 1, GL_FALSE, glm::value_ptr(view));
+    glUniformMatrix4fv(glGetUniformLocation(pointShader, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+    
+    // Update point positions
+    std::vector<glm::vec3> pointPositions;
+    for (const auto& point : controlPoints) {
+        pointPositions.push_back(glm::vec3(point.x, 0.1f, point.y));
+    }
+    
+    glBindVertexArray(pointVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, pointVBO);
+    glBufferData(GL_ARRAY_BUFFER, pointPositions.size() * sizeof(glm::vec3), pointPositions.data(), GL_DYNAMIC_DRAW);
+    
+    // Render points
+    glPointSize(8.0f);
+    glDrawArrays(GL_POINTS, 0, pointPositions.size());
+    glBindVertexArray(0);
+}
 
 unsigned int load_texture_from_file(const std::string& filename, const std::string& directory) {
     std::string fullPath = directory + "/" + filename;
@@ -303,6 +593,7 @@ unsigned int load_texture_from_file(const std::string& filename, const std::stri
     } else {
         std::cout << "Texture failed to load at path: " << fullPath << std::endl;
         stbi_image_free(data);
+        glDeleteTextures(1, &textureID);
         return 0;
     }
     
@@ -370,6 +661,19 @@ void setup_light_uniforms(GLuint shaderProgram, glm::vec3 lightPos) {
     glUniform3f(glGetUniformLocation(shaderProgram, "light.ambient"), ambientLight.r, ambientLight.g, ambientLight.b);
     glUniform3f(glGetUniformLocation(shaderProgram, "light.diffuse"), diffuseLight.r, diffuseLight.g, diffuseLight.b);
     glUniform3f(glGetUniformLocation(shaderProgram, "light.specular"), specularLight.r, specularLight.g, specularLight.b);
+    
+    // Light attenuation
+    glUniform1f(glGetUniformLocation(shaderProgram, "light.constant"), 1.0f);
+    glUniform1f(glGetUniformLocation(shaderProgram, "light.linear"), 0.09f);
+    glUniform1f(glGetUniformLocation(shaderProgram, "light.quadratic"), 0.032f);
+    
+    // Fog settings
+    glUniform1i(glGetUniformLocation(shaderProgram, "useFog"), GL_TRUE);
+    glm::vec3 fogColor(0.5f, 0.5f, 0.5f);
+    glUniform3f(glGetUniformLocation(shaderProgram, "fogColor"), fogColor.r, fogColor.g, fogColor.b);
+    glUniform1f(glGetUniformLocation(shaderProgram, "fogDensity"), 0.0f); // 0 for linear fog
+    glUniform1f(glGetUniformLocation(shaderProgram, "fogStart"), 10.0f);
+    glUniform1f(glGetUniformLocation(shaderProgram, "fogEnd"), 50.0f);
 }
 
 void error_log(int cod, const char * description) {
@@ -407,6 +711,7 @@ int main() {
     glfwSetScrollCallback(window, scroll_callback);
     glfwSetErrorCallback(error_log);
     glfwSetKeyCallback(window, key_callback);
+    glfwSetMouseButtonCallback(window, mouse_button_callback);
 
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
@@ -421,12 +726,23 @@ int main() {
     //cameraPos = glm::vec3(0.0f, 10.0f, 0.0f); 
     //cameraFront = glm::vec3(0.0f, -50.0f, -1.0f);
     current_scene = std::make_unique<Scene>();
+    current_track->name = "Track";
+    current_scene->add_object(current_track);
     for (auto obj : Obj3DWriter::file_reader())
     {
         current_scene->add_object(obj);
         Obj3DWriter::write(obj);
     }
+    // In main(), after shader setup but before the main loop:
+    // Better camera position for track editing
+    cameraPos = glm::vec3(0.0f, 10.0f, 10.0f);  // Higher up, looking down
+    cameraFront = glm::normalize(glm::vec3(0.0f, -0.5f, -1.0f)); // Looking down and forward
+    yaw = -135.0f; // Adjust yaw to match the direction
+    pitch = -30.0f; // Looking downward
 
+    current_mode = 0;
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+    
     while (!glfwWindowShouldClose(window)) {
 
         float currentFrame = glfwGetTime();
@@ -448,7 +764,6 @@ int main() {
         GLuint objectColorLoc = glGetUniformLocation(shaderID, "objectColor");
         glUniform3f(objectColorLoc, 0.8f, 0.8f, 0.8f);
 
-        
 
         specify_view();
         specify_projection();
@@ -463,17 +778,26 @@ int main() {
 
             //object rotation for testing
             //obj->transform = glm::rotate(obj->transform, 0.01f, glm::vec3(1.0));
-            
-            for (auto group : obj->mesh->groups) {
-                if (group->material){
-                    std::string directory = obj->obj_file.substr(0, obj->obj_file.find_last_of("/\\"));
-                    setup_material_uniforms(shaderID, group->material, directory);
+            if (obj->mesh){
+
+                for (auto group : obj->mesh->groups) {
+                    if (group->material){
+                        std::string directory = obj->obj_file.substr(0, obj->obj_file.find_last_of("/\\"));
+                        setup_material_uniforms(shaderID, group->material, directory);
+                    }
+                    glBindVertexArray(group->VAO);
+                    glDrawArrays(GL_TRIANGLES, 0, group->vert_count);
                 }
-                glBindVertexArray(group->VAO);
-                glDrawArrays(GL_TRIANGLES, 0, group->vert_count);
             }
         }
         glBindVertexArray(0);
+
+
+        if (current_mode == 0) {  
+            glDisable(GL_DEPTH_TEST); 
+            renderControlPoints();
+            glEnable(GL_DEPTH_TEST);
+        }
 
         glfwSwapBuffers(window);
         glfwPollEvents();

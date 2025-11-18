@@ -1,51 +1,44 @@
 #include "bcurve.h"
 #include <cmath>
 
+#include <iostream>
+#include <vector>
+#include <string>
+
 void BSpline::addControlPoint(const glm::vec3& point) {
     controlPoints.push_back(point);
 }
 
-void BSpline::setControlPoints(const std::vector<glm::vec3>& points) {
+void BSpline::set_control_points(const std::vector<glm::vec3>& points) {
     controlPoints = points;
 }
 
 void BSpline::setStepsPerSegment(int steps) {
-    stepsPerSegment = steps;
+    stepsPerSegment = std::max(steps, 10); // Ensure minimum steps
 }
 
+// In bcurve.cpp - Improve the evaluateCurve function
 std::vector<glm::vec3> BSpline::evaluateCurve() const {
     std::vector<glm::vec3> curvePoints;
     
     if (controlPoints.size() < 4) {
+        // Existing fallback code...
         return curvePoints;
     }
     
     int N = controlPoints.size();
     float inc = 1.0f / stepsPerSegment;
     
+    // Use uniform B-spline with proper knot vector
     for (int i = 0; i < N; i++) {
-        for (float t = 0; t <= 1.0f; t += inc) {
-            float X[4] = {
-                controlPoints[i].x,
-                controlPoints[(i + 1) % N].x,
-                controlPoints[(i + 2) % N].x,
-                controlPoints[(i + 3) % N].x
-            };
+        for (float t = 0; t < 1.0f; t += inc) {
+            // Get four control points with wrap-around for closed curve
+            int i0 = (i - 1 + N) % N;
+            int i1 = i % N;
+            int i2 = (i + 1) % N;
+            int i3 = (i + 2) % N;
             
-            float Y[4] = {
-                controlPoints[i].y,
-                controlPoints[(i + 1) % N].y,
-                controlPoints[(i + 2) % N].y,
-                controlPoints[(i + 3) % N].y
-            };
-            
-            float Z[4] = {
-                controlPoints[i].z,
-                controlPoints[(i + 1) % N].z,
-                controlPoints[(i + 2) % N].z,
-                controlPoints[(i + 3) % N].z
-            };
-            
+            // Cubic B-spline basis functions
             float t2 = t * t;
             float t3 = t2 * t;
             
@@ -54,13 +47,21 @@ std::vector<glm::vec3> BSpline::evaluateCurve() const {
             float B2 = (-3*t3 + 3*t2 + 3*t + 1) / 6.0f;
             float B3 = t3 / 6.0f;
             
-            float x = B0 * X[0] + B1 * X[1] + B2 * X[2] + B3 * X[3];
-            float y = B0 * Y[0] + B1 * Y[1] + B2 * Y[2] + B3 * Y[3];
-            float z = B0 * Z[0] + B1 * Z[1] + B2 * Z[2] + B3 * Z[3];
+            glm::vec3 point = 
+                controlPoints[i0] * B0 +
+                controlPoints[i1] * B1 +
+                controlPoints[i2] * B2 +
+                controlPoints[i3] * B3;
             
-            curvePoints.push_back(glm::vec3(x, y, z));
+            curvePoints.push_back(point);
         }
+    }
+    
+    // Ensure the curve is properly closed
+    if (!curvePoints.empty() && controlPoints.size() >= 4) {
+        curvePoints.push_back(curvePoints[0]);
     }
     
     return curvePoints;
 }
+

@@ -11,6 +11,15 @@
 
 #include "obj3d.h"
 
+void Obj3D::update(float deltaTime) {
+    if (is_animated && animation) {
+        animation_time += deltaTime;
+        glm::vec3 newPos = animation->get_position_at_time(animation_time);
+        transform = glm::translate(glm::mat4(1.0f), newPos);
+    }
+}
+
+
 void Obj3D::setup_buffers(){
     if (buffers_created) return;
 

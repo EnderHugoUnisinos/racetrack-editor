@@ -3,7 +3,7 @@
 #include <vector>
 #include <string>
 
-#include "obj3d.h"
+#include "../rendering/3D/obj3d.h"
 
 class Obj3DWriter{
 public:

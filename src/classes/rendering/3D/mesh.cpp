@@ -38,8 +38,9 @@ void Mesh::process_vertex(const glm::ivec3& indices,
     std::vector<glm::vec2>& ms,
     std::vector<glm::vec3>& ns
 ){
-    glm::vec3 v, n;
-    glm::vec2 m;
+    glm::vec3 v(0.0f);
+    glm::vec2 m(0.0f);
+    glm::vec3 n(0.0f, 1.0f, 0.0f);
 
     if (indices.x >= 1) v = vs[indices.x - 1];
     if (indices.y >= 1) m = ms[indices.y - 1];

@@ -18,19 +18,29 @@ void Scene::remove_object(int index) {
         objects.erase(objects.begin() + index);
     }
 }
-void Scene::update(float delta_time){}
+void Scene::update(float delta_time){
+    for (auto obj : objects) {
+        if (obj) {
+            obj->update(delta_time);
+        }
+    }
+}
 void Scene::cleanup() {
     for (auto obj : objects) {
-        if (obj->mesh) {
+        if (obj && obj->mesh) {
             for (auto group : obj->mesh->groups) {
-                if (group->material) {
-                    group->material->cleanup();
-                }
-                if (group->VAO) {
-                    glDeleteVertexArrays(1, &group->VAO);
-                }
-                if (group->VBO) {
-                    glDeleteBuffers(1, &group->VBO);
+                if (group) {
+                    if (group->material) {
+                        group->material->cleanup();
+                    }
+                    if (group->VAO) {
+                        glDeleteVertexArrays(1, &group->VAO);
+                        group->VAO = 0;
+                    }
+                    if (group->VBO) {
+                        glDeleteBuffers(1, &group->VBO);
+                        group->VBO = 0;
+                    }
                 }
             }
         }
