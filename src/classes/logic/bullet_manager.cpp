@@ -1,6 +1,6 @@
 #include "bullet_manager.h"
 
-void BulletManager::add_bullet(const glm::vec3& position, const glm::vec3& direction) {
+void BulletManager::addBullet(const glm::vec3& position, const glm::vec3& direction) {
     bullets.push_back(std::make_shared<Bullet>(position, direction));
 }
 
@@ -26,15 +26,15 @@ void BulletManager::checkCollisions(std::vector<std::shared_ptr<Obj3D>>& objects
             std::shared_ptr<BoundingBox> objBBox = obj->bbox;
             glm::mat4 objTransform = obj->transform;
             
-            std::shared_ptr<BoundingBox> worldObjBBox = transform_bounding_box(objBBox, objTransform);
+            std::shared_ptr<BoundingBox> worldObjBBox = transformBoundingBox(objBBox, objTransform);
             
-            if (check_AABB_collision(bulletBBox, worldObjBBox)) {
+            if (checkAABBCollision(bulletBBox, worldObjBBox)) {
                 if (obj->eliminable) {
                     obj->collidable = false;
                     obj->active = false;
                     bullet->active = false;
                 } else {
-                    glm::vec3 normal = calculate_collision_normal(bulletBBox, worldObjBBox);
+                    glm::vec3 normal = calculateCollisionNormal(bulletBBox, worldObjBBox);
                     bullet->reflect(normal);
                 }
             }
@@ -42,7 +42,7 @@ void BulletManager::checkCollisions(std::vector<std::shared_ptr<Obj3D>>& objects
     }
 }
 
-std::shared_ptr<BoundingBox> BulletManager::transform_bounding_box(const std::shared_ptr<BoundingBox>& bbox, const glm::mat4& transform) {
+std::shared_ptr<BoundingBox> BulletManager::transformBoundingBox(const std::shared_ptr<BoundingBox>& bbox, const glm::mat4& transform) {
     std::shared_ptr<BoundingBox> result = std::make_shared<BoundingBox>();
         
     glm::vec3 corners[8] = {
@@ -73,13 +73,13 @@ std::shared_ptr<BoundingBox> BulletManager::transform_bounding_box(const std::sh
     return result;
 }
 
-bool BulletManager::check_AABB_collision(const std::shared_ptr<BoundingBox>& a, const std::shared_ptr<BoundingBox>& b) const {
+bool BulletManager::checkAABBCollision(const std::shared_ptr<BoundingBox>& a, const std::shared_ptr<BoundingBox>& b) const {
     return (a->min.x <= b->max.x && a->max.x >= b->min.x) &&
     (a->min.y <= b->max.y && a->max.y >= b->min.y) &&
     (a->min.z <= b->max.z && a->max.z >= b->min.z);
 }
 
-glm::vec3 BulletManager::calculate_collision_normal(const std::shared_ptr<BoundingBox>& bulletBox, const std::shared_ptr<BoundingBox>& objBox) const {
+glm::vec3 BulletManager::calculateCollisionNormal(const std::shared_ptr<BoundingBox>& bulletBox, const std::shared_ptr<BoundingBox>& objBox) const {
     glm::vec3 penetration;
     const float epsilon = 0.001f;
     
@@ -97,7 +97,7 @@ glm::vec3 BulletManager::calculate_collision_normal(const std::shared_ptr<Boundi
 }
 
 void BulletManager::setup_cube_buffers() {
-    if (buffers_initialized) return;
+    if (buffersInitialized) return;
         
     float vertices[] = {
         // Positions          // Normals
@@ -158,11 +158,11 @@ void BulletManager::setup_cube_buffers() {
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
 
     glBindVertexArray(0);
-    buffers_initialized = true;
+    buffersInitialized = true;
 }
 
 void BulletManager::render(GLuint shaderProgram) {
-    if (!buffers_initialized) return;
+    if (!buffersInitialized) return;
         
     glBindVertexArray(cubeVAO);
     

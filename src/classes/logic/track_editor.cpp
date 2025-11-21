@@ -13,7 +13,6 @@
 void TrackEditor::add_control_point(const glm::vec2& point) {
     control_points.push_back(point);
     
-    // Converter para 3D para a BSpline
     std::vector<glm::vec3> points;
     for (const auto& p : control_points) {
         points.push_back(glm::vec3(p.x, 0.0f, p.y));
@@ -64,7 +63,6 @@ void TrackEditor::generate_track_mesh(std::shared_ptr<Mesh> mesh) {
         mesh->groups.push_back(group);
     }
 
-    // Clear existing mesh data
     mesh->verts.clear();
     mesh->mappings.clear();
     mesh->normals.clear();
@@ -77,38 +75,30 @@ void TrackEditor::generate_track_mesh(std::shared_ptr<Mesh> mesh) {
     std::vector<glm::vec3> tangents;
     std::vector<glm::vec3> normals;
 
-    // Pre-calculate smooth tangents and normals
     for (size_t i = 0; i < centerPoints.size(); i++) {
         glm::vec3 prev = centerPoints[(i - 1 + centerPoints.size()) % centerPoints.size()];
         glm::vec3 current = centerPoints[i];
         glm::vec3 next = centerPoints[(i + 1) % centerPoints.size()];
         
-        // Calculate smooth tangent using Catmull-Rom style
         glm::vec3 tangent = glm::normalize(next - prev);
         tangents.push_back(tangent);
         
-        // Calculate normal in XZ plane (perpendicular to tangent)
         glm::vec3 normal = glm::normalize(glm::cross(tangent, glm::vec3(0.0f, 1.0f, 0.0f)));
         normals.push_back(normal);
     }
 
-    // Generate inner and outer points
     for (size_t i = 0; i < centerPoints.size(); i++) {
         innerPoints.push_back(centerPoints[i] - normals[i] * track_width * 0.5f);
         outerPoints.push_back(centerPoints[i] + normals[i] * track_width * 0.5f);
     }
 
-    // Generate vertices, texture coordinates, and normals
     for (size_t i = 0; i < centerPoints.size(); i++) {
-        // Calculate surface normal (pointing upward for flat track)
         glm::vec3 surfaceNormal(0.0f, 1.0f, 0.0f);
         
-        // Add inner vertex
         mesh->verts.push_back(innerPoints[i]);
         mesh->mappings.push_back(glm::vec2(static_cast<float>(i) * textureScale, 0.0f));
         mesh->normals.push_back(surfaceNormal);
         
-        // Add outer vertex
         mesh->verts.push_back(outerPoints[i]);
         mesh->mappings.push_back(glm::vec2(static_cast<float>(i) * textureScale, 1.0f));
         mesh->normals.push_back(surfaceNormal);
@@ -133,7 +123,6 @@ void TrackEditor::generate_track_mesh(std::shared_ptr<Mesh> mesh) {
     mesh->groups[0]->vert_count = 0;
     mesh->groups[0]->faces.clear();
 
-    // Generate proper triangle indices (QUAD STRIPS)
     int numSegments = centerPoints.size();
     for (int i = 0; i < numSegments; i++) {
         int next_i = (i + 1) % numSegments;
@@ -180,30 +169,25 @@ void TrackEditor::export_track_OBJ(const std::string& filename) {
 
     file << "mtllib exported_track.mtl\n";
     file << "o track\n";
-    // Write vertices
     for (const auto& vertex : mesh->verts) {
         file << "v " << vertex.x << " " << vertex.y << " " << vertex.z << "\n";
     }
     
-    // Write texture coordinates
     for (const auto& uv : mesh->mappings) {
         file << "vt " << uv.x << " " << uv.y << "\n";
     }
     
-    // Write normals
     for (const auto& normal : mesh->normals) {
         file << "vn " << normal.x << " " << normal.y << " " << normal.z << "\n";
     }
     
-    // Write faces
     if (!mesh->groups.empty() && !mesh->groups[0]->faces.empty()) {
         file << "\nusemtl TrackMaterial\n";
-        file << "s 1\n"; // Smoothing group
+        file << "s 1\n";
         
         for (const auto& face : mesh->groups[0]->faces) {
             file << "f";
             for (size_t j = 0; j < face->verts.size(); j++) {
-                // OBJ indices are 1-based
                 file << " " << (face->verts[j] + 1) << "/" 
                      << (face->textures[j] + 1) << "/" 
                      << (face->normals[j] + 1);
@@ -227,7 +211,6 @@ void TrackEditor::export_animation_file(const std::string& filename) {
     
     file << "# Animation points for racetrack\n";
     for (const auto& point : centerPoints) {
-        // Inverter Y com Z para o visualizador 3D
         file << point.x << " " << point.z << " " << -point.y << "\n";
     }
     

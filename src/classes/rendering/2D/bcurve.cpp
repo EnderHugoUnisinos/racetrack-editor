@@ -14,31 +14,26 @@ void BSpline::set_control_points(const std::vector<glm::vec3>& points) {
 }
 
 void BSpline::setStepsPerSegment(int steps) {
-    stepsPerSegment = std::max(steps, 10); // Ensure minimum steps
+    stepsPerSegment = std::max(steps, 10);
 }
 
-// In bcurve.cpp - Improve the evaluateCurve function
 std::vector<glm::vec3> BSpline::evaluateCurve() const {
     std::vector<glm::vec3> curvePoints;
     
     if (controlPoints.size() < 4) {
-        // Existing fallback code...
         return curvePoints;
     }
     
     int N = controlPoints.size();
     float inc = 1.0f / stepsPerSegment;
     
-    // Use uniform B-spline with proper knot vector
     for (int i = 0; i < N; i++) {
         for (float t = 0; t < 1.0f; t += inc) {
-            // Get four control points with wrap-around for closed curve
             int i0 = (i - 1 + N) % N;
             int i1 = i % N;
             int i2 = (i + 1) % N;
             int i3 = (i + 2) % N;
             
-            // Cubic B-spline basis functions
             float t2 = t * t;
             float t3 = t2 * t;
             
@@ -57,7 +52,6 @@ std::vector<glm::vec3> BSpline::evaluateCurve() const {
         }
     }
     
-    // Ensure the curve is properly closed
     if (!curvePoints.empty() && controlPoints.size() >= 4) {
         curvePoints.push_back(curvePoints[0]);
     }

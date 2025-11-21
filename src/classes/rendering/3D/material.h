@@ -26,12 +26,10 @@ public:
                (!normalMap.empty() && normal_texture == 0);
     }
     
-    // Texture IDs
     unsigned int diffuse_texture = 0;
     unsigned int specular_texture = 0;
     unsigned int normal_texture = 0;
     
-    // Texture file paths
     std::string diffuseMap;
     std::string specularMap;
     std::string normalMap;

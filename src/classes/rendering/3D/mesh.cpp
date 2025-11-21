@@ -16,11 +16,10 @@ void Mesh::process_data(){
     processed_normals.clear();
     
     for (auto group : groups) {
-        group->vert_count = 0; // Initialize vert_count
+        group->vert_count = 0;
         
         for (const auto& face : group->faces) {
             if (face->verts.size() > 3) {
-                // Triangulate polygon
                 for (size_t i = 1; i < face->verts.size() - 1; i++) {
                     process_vertex(glm::ivec3(face->verts[0], face->textures[0], face->normals[0]), verts, mappings, normals);
                     process_vertex(glm::ivec3(face->verts[i], face->textures[i], face->normals[i]), verts, mappings, normals);
@@ -28,7 +27,6 @@ void Mesh::process_data(){
                     group->vert_count += 3;
                 }
             } else {
-                // Triangle
                 for (size_t i = 0; i < face->verts.size(); i++) {
                     process_vertex(glm::ivec3(face->verts[i], face->textures[i], face->normals[i]), verts, mappings, normals);
                     group->vert_count++;

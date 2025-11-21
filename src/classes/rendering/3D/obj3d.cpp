@@ -51,7 +51,6 @@ void Obj3D::setup_buffers(){
     if (buffers_created) return;
 
     for (auto group : mesh->groups) {
-        // Process this group's data separately
         std::vector<glm::vec3> group_verts;
         std::vector<glm::vec2> group_mappings;
         std::vector<glm::vec3> group_normals;
@@ -82,12 +81,10 @@ void Obj3D::setup_buffers(){
         
         std::vector<float> interleaved_data;
         for (size_t i = 0; i < group_verts.size(); i++) {
-            // Position
             interleaved_data.push_back(group_verts[i].x);
             interleaved_data.push_back(group_verts[i].y);
             interleaved_data.push_back(group_verts[i].z);
 
-            // Texture coordinates
             if (i < group_mappings.size()) {
                 interleaved_data.push_back(group_mappings[i].x);
                 interleaved_data.push_back(group_mappings[i].y);
@@ -96,7 +93,6 @@ void Obj3D::setup_buffers(){
                 interleaved_data.push_back(0.0f);
             }
 
-            // Normals
             if (i < group_normals.size()) {
                 interleaved_data.push_back(group_normals[i].x);
                 interleaved_data.push_back(group_normals[i].y);

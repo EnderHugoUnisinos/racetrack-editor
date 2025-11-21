@@ -15,17 +15,14 @@
 #include "classes/logic/obj3dwriter.h"
 #include "classes/logic/bullet_manager.h"
 
-// STB_IMAGE
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
 using namespace std;
 namespace fs = std::filesystem;
 
-// Dimensões da janela
 const GLuint WIDTH = 1200, HEIGHT = 800;
 
-// Variáveis globais de controle da câmera
 glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 20.0f);
 glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
 glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
@@ -36,11 +33,9 @@ float lastX = WIDTH / 2.0f;
 float lastY = HEIGHT / 2.0f;
 float fov = 45.0f;
 
-// Controle de tempo entre frames
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
-// IDs de shader
 GLuint shaderID;
 
 GLuint VAO;
@@ -92,6 +87,9 @@ const GLchar* fragmentShaderSource = R"glsl(
         vec3 ambient;
         vec3 diffuse;
         vec3 specular;
+        float constant;
+        float linear;
+        float quadratic;
     };
     
     uniform Material material;
@@ -102,6 +100,9 @@ const GLchar* fragmentShaderSource = R"glsl(
     
     void main()
     {
+        float distance = length(light.position - FragPos);
+        float attenuation = 1.0 / (light.constant + light.linear * distance + light.quadratic * (distance * distance));
+        
         vec3 ambient = light.ambient * material.ambient;
         
         vec3 norm = normalize(Normal);
@@ -125,6 +126,9 @@ const GLchar* fragmentShaderSource = R"glsl(
         } else {
             specular = light.specular * spec * material.specularColor;
         }
+        
+        diffuse *= attenuation;
+        specular *= attenuation;
         
         vec3 result = ambient + diffuse + specular;
         FragColor = vec4(result, 1.0);
@@ -202,7 +206,6 @@ void update_track_preview() {
 }
 
 void track_editor(double xpos, double ypos) {
-    // Store mouse position for click handling
     static double lastClickX = 0, lastClickY = 0;
     lastClickX = xpos;
     lastClickY = ypos;
@@ -213,35 +216,26 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
         double xpos, ypos;
         glfwGetCursorPos(window, &xpos, &ypos);
         
-        // Convert screen coordinates to normalized device coordinates
         float ndcX = (2.0f * xpos) / WIDTH - 1.0f;
         float ndcY = 1.0f - (2.0f * ypos) / HEIGHT;
         
-        // Create a ray in world coordinates using inverse matrices
         glm::vec4 rayClip = glm::vec4(ndcX, ndcY, -1.0f, 1.0f);
         
-        // Get projection and view matrices
         glm::mat4 projection = glm::perspective(glm::radians(fov), (float)WIDTH / HEIGHT, 0.1f, 100.0f);
         glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
         
-        // Convert to eye coordinates
         glm::mat4 invProjection = glm::inverse(projection);
         glm::vec4 rayEye = invProjection * rayClip;
         rayEye = glm::vec4(rayEye.x, rayEye.y, -1.0f, 0.0f);
         
-        // Convert to world coordinates
         glm::mat4 invView = glm::inverse(view);
         glm::vec4 rayWorld = invView * rayEye;
         glm::vec3 rayDir = glm::normalize(glm::vec3(rayWorld));
         
-        // Calculate intersection with ground plane (y = 0)
-        // Ray equation: P = cameraPos + t * rayDir
-        // We want Py = 0, so: cameraPos.y + t * rayDir.y = 0
         if (fabs(rayDir.y) > 0.0001f) {
             float t = -cameraPos.y / rayDir.y;
             glm::vec3 worldPos = cameraPos + t * rayDir;
             
-            // Add control point at ground level
             trackEditor->add_control_point(glm::vec2(worldPos.x, worldPos.z));
             std::cout << "Added control point at: " << worldPos.x << ", " << worldPos.z << std::endl;
             
@@ -282,7 +276,6 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 {
     if (action == GLFW_PRESS) {
         if (key == GLFW_KEY_TAB) {
-            // Switch between modes
             current_mode = (current_mode + 1) % 2;
             if (current_mode == 0) {
                 glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
@@ -292,7 +285,6 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
             }
         }
         else if (key == GLFW_KEY_E && current_mode == 0) {
-            // Export track
             trackEditor->export_track_OBJ("../objs/track/exported_track.obj");
             trackEditor->export_animation_file("../objs/track/animation_path.txt");
             std::cout << "Track exported!" << std::endl;
@@ -315,26 +307,39 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
         else if (key == GLFW_KEY_ENTER && current_mode == 0) {
             finish_track();
         }
-        else if (key == GLFW_KEY_KP_ADD) {
+        else if (key == GLFW_KEY_PAGE_DOWN) {
             int size = current_scene->objects.size();
-            currentObjectIndex += 1;
-            if (currentObjectIndex >= size) {
-                currentObjectIndex = 0;
+            if (currentObjectIndex == 0) {
+                currentObjectIndex = size-1;
             }
-            if (!current_scene->objects[currentObjectIndex]->selectable) {
-                for (int i = currentObjectIndex; i < size; i++){
-                    currentObjectIndex = i;
-                    if (current_scene->objects[i]->selectable) {
-                        break;
-                    }
+            int f = currentObjectIndex-1;
+            for (int i = 0; i < current_scene->objects.size(); i++){
+                if (f <= 0) {f = current_scene->objects.size()-1;}
+                if (current_scene->objects[f]->selectable) {
+                    currentObjectIndex = f;
+                    break;
                 }
-            }
-            if (currentObjectIndex >= size) {
-                currentObjectIndex = 0;
+                f--;
             }
         }
+        else if (key == GLFW_KEY_PAGE_UP) {
+            int size = current_scene->objects.size();
+            if (currentObjectIndex == size-1) {
+                currentObjectIndex = 0;
+            }
+            int f = currentObjectIndex+1;
+            for (int i = 0; i < current_scene->objects.size(); i++){
+                if (current_scene->objects[f]->selectable) {
+                    currentObjectIndex = f;
+                    break;
+                }
+                if (f >= current_scene->objects.size()-1) {f = 0;}
+                f++;
+            }
+        }
+        
         else if (key == GLFW_KEY_SPACE && current_mode == 1) {
-            bullet_manager->add_bullet(cameraPos, cameraFront);
+            bullet_manager->addBullet(cameraPos, cameraFront);
         }
     }
 }
@@ -342,7 +347,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 void processInput(GLFWwindow* window) {
     float cameraSpeed = 5.0f * deltaTime;
     if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
-        cameraSpeed *= 2;
+        cameraSpeed *= 3;
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
@@ -356,23 +361,29 @@ void processInput(GLFWwindow* window) {
         
     if (currentObjectIndex < current_scene->objects.size()){
         if (current_scene->objects[currentObjectIndex]->selectable) {
-            if (glfwGetKey(window, GLFW_KEY_KP_8) == GLFW_PRESS) {
+            if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) {
                 glm::vec3 v(0.0f, 0.0f, -0.1f);
                 current_scene->objects[currentObjectIndex]->transform = glm::translate(current_scene->objects[currentObjectIndex]->transform, v);
             }
-            if (glfwGetKey(window, GLFW_KEY_KP_6) == GLFW_PRESS) {
+            else if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
                 glm::vec3 v(0.1f, 0.0f, 0.0f);
                 current_scene->objects[currentObjectIndex]->transform = glm::translate(current_scene->objects[currentObjectIndex]->transform, v);
                 
             }
-            if (glfwGetKey(window, GLFW_KEY_KP_4) == GLFW_PRESS) {
+            else if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) {
                 glm::vec3 v(-0.1f, 0.0f, 0.0f);
                 current_scene->objects[currentObjectIndex]->transform = glm::translate(current_scene->objects[currentObjectIndex]->transform, v);
                 
             }
-            if (glfwGetKey(window, GLFW_KEY_KP_2) == GLFW_PRESS) {
+            else if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) {
                 glm::vec3 v(0.0f, 0.0f, 0.1f);
                 current_scene->objects[currentObjectIndex]->transform = glm::translate(current_scene->objects[currentObjectIndex]->transform, v);
+            }
+            else if (glfwGetKey(window, GLFW_KEY_KP_1) == GLFW_PRESS) {
+                current_scene->objects[currentObjectIndex]->transform = glm::rotate(current_scene->objects[currentObjectIndex]->transform, -0.02f, glm::vec3(0,1,0));
+            }
+            else if (glfwGetKey(window, GLFW_KEY_KP_2) == GLFW_PRESS) {
+                current_scene->objects[currentObjectIndex]->transform = glm::rotate(current_scene->objects[currentObjectIndex]->transform, 0.02f, glm::vec3(0,1,0));
             }
         }
     }
@@ -460,18 +471,16 @@ GLuint setup_point_shader() {
         #version 450 core
         out vec4 FragColor;
         void main() {
-            // Draw smooth circular points with border
             vec2 coord = gl_PointCoord - vec2(0.5);
             float dist = length(coord);
             
             if(dist > 0.5)
                 discard;
                 
-            // White fill with black border
             if(dist > 0.4) {
-                FragColor = vec4(0.0, 0.0, 0.0, 1.0); // Black border
+                FragColor = vec4(0.0, 0.0, 0.0, 1.0); 
             } else {
-                FragColor = vec4(1.0, 1.0, 1.0, 1.0); // White fill
+                FragColor = vec4(1.0, 1.0, 1.0, 1.0); 
             }
         }
     )glsl";
@@ -496,15 +505,11 @@ GLuint setup_point_shader() {
 }
 
 void render_control_points() {
-    //if (current_mode != 0) return;
-    
     auto controlPoints = trackEditor->control_points;
     if (controlPoints.empty()) return;
     
-    // Create a simple shader for points
     static GLuint pointVAO = 0, pointVBO = 0;
     
-    // Initialize on first call
     if (pointShader == 0) {
         pointShader = setup_point_shader();
     }
@@ -514,14 +519,12 @@ void render_control_points() {
     
     glUseProgram(pointShader);
     
-    // Set matrices for point shader
     glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
     glm::mat4 projection = glm::perspective(glm::radians(fov), (float)WIDTH / HEIGHT, 0.1f, 100.0f);
     
     glUniformMatrix4fv(glGetUniformLocation(pointShader, "view"), 1, GL_FALSE, glm::value_ptr(view));
     glUniformMatrix4fv(glGetUniformLocation(pointShader, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
     
-    // Update point positions
     std::vector<glm::vec3> pointPositions;
     for (const auto& point : controlPoints) {
         pointPositions.push_back(glm::vec3(point.x, 0.1f, point.y));
@@ -531,7 +534,6 @@ void render_control_points() {
     glBindBuffer(GL_ARRAY_BUFFER, pointVBO);
     glBufferData(GL_ARRAY_BUFFER, pointPositions.size() * sizeof(glm::vec3), pointPositions.data(), GL_DYNAMIC_DRAW);
     
-    // Render points
     glPointSize(8.0f);
     glDrawArrays(GL_POINTS, 0, pointPositions.size());
     glBindVertexArray(0);
@@ -540,7 +542,6 @@ void render_control_points() {
 unsigned int load_texture_from_file(const std::string& filename, const std::string& directory) {
     std::string fullPath = directory + "/" + filename;
     
-    // Fix path separators
     std::replace(fullPath.begin(), fullPath.end(), '\\', '/');
     
     std::cout << "Loading texture: " << fullPath << std::endl;
@@ -549,7 +550,7 @@ unsigned int load_texture_from_file(const std::string& filename, const std::stri
     glGenTextures(1, &textureID);
     
     int width, height, nrComponents;
-    stbi_set_flip_vertically_on_load(true); // Flip textures if needed
+    stbi_set_flip_vertically_on_load(true); 
     unsigned char* data = stbi_load(fullPath.c_str(), &width, &height, &nrComponents, 0);
     if (data) {
         GLenum format;
@@ -642,8 +643,8 @@ void setup_material_uniforms(GLuint shaderProgram, const std::shared_ptr<Materia
 }
 
 void setup_light_uniforms(GLuint shaderProgram, glm::vec3 lightPos) {
-    // Light properties
-    glm::vec3 lightColor = glm::vec3(1.0f);
+
+    glm::vec3 lightColor = glm::vec3(10.0f);
     glm::vec3 ambientLight = lightColor * 0.1f;
     glm::vec3 diffuseLight = lightColor * 0.8f;
     glm::vec3 specularLight = lightColor * 1.0f;
@@ -653,16 +654,16 @@ void setup_light_uniforms(GLuint shaderProgram, glm::vec3 lightPos) {
     glUniform3f(glGetUniformLocation(shaderProgram, "light.diffuse"), diffuseLight.r, diffuseLight.g, diffuseLight.b);
     glUniform3f(glGetUniformLocation(shaderProgram, "light.specular"), specularLight.r, specularLight.g, specularLight.b);
     
-    // Light attenuation
+
     glUniform1f(glGetUniformLocation(shaderProgram, "light.constant"), 1.0f);
     glUniform1f(glGetUniformLocation(shaderProgram, "light.linear"), 0.09f);
     glUniform1f(glGetUniformLocation(shaderProgram, "light.quadratic"), 0.032f);
     
-    // Fog settings
+
     glUniform1i(glGetUniformLocation(shaderProgram, "useFog"), GL_TRUE);
     glm::vec3 fogColor(0.5f, 0.5f, 0.5f);
     glUniform3f(glGetUniformLocation(shaderProgram, "fogColor"), fogColor.r, fogColor.g, fogColor.b);
-    glUniform1f(glGetUniformLocation(shaderProgram, "fogDensity"), 0.0f); // 0 for linear fog
+    glUniform1f(glGetUniformLocation(shaderProgram, "fogDensity"), 0.01f);
     glUniform1f(glGetUniformLocation(shaderProgram, "fogStart"), 10.0f);
     glUniform1f(glGetUniformLocation(shaderProgram, "fogEnd"), 50.0f);
 }
@@ -718,7 +719,6 @@ int main() {
         return -1;
     }
 
-    // Configura callbacks
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetErrorCallback(error_log);
@@ -738,7 +738,7 @@ int main() {
     //cameraPos = glm::vec3(0.0f, 10.0f, 0.0f); 
     //cameraFront = glm::vec3(0.0f, -50.0f, -1.0f);
     if (pointShader == 0) {
-    pointShader = setup_point_shader();  // This should be done once at startup
+    pointShader = setup_point_shader();
     }
     current_scene = std::make_unique<Scene>();
     setup_track();
@@ -761,6 +761,20 @@ int main() {
     current_mode = 0;
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
     
+    int size = current_scene->objects.size();
+    if (currentObjectIndex == size-1) {
+        currentObjectIndex = 0;
+    }
+    int f = currentObjectIndex+1;
+    for (int i = 0; i < current_scene->objects.size(); i++){
+        if (current_scene->objects[f]->selectable) {
+            currentObjectIndex = f;
+            break;
+        }
+        if (f >= current_scene->objects.size()-1) {f = 0;}
+        f++;
+    }
+
     while (!glfwWindowShouldClose(window)) {
 
         float currentFrame = glfwGetTime();

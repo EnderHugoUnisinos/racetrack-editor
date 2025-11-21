@@ -59,11 +59,9 @@ std::shared_ptr<Mesh> Obj3DWriter::load_from_file(const std::string& filename){
         iss >> prefix;
         
         if (prefix == "g" || prefix == "o") {
-            // Create new group
             std::string name;
             iss >> name;
             if (name.empty() && prefix == "o") {
-                // Some OBJ files use "o" without name, use default
                 name = "Default";
             }
             
@@ -80,7 +78,6 @@ std::shared_ptr<Mesh> Obj3DWriter::load_from_file(const std::string& filename){
         }
         else if (prefix == "usemtl") {
             if (!current_group) {
-                // If no group exists, create a default one
                 current_group = std::make_shared<Group>("Default");
                 mesh->groups.push_back(current_group);
             }
@@ -109,7 +106,6 @@ std::shared_ptr<Mesh> Obj3DWriter::load_from_file(const std::string& filename){
         }
         else if (prefix == "f") {
             if (!current_group) {
-                // If we encounter a face before any group, create default group
                 current_group = std::make_shared<Group>("Default");
                 mesh->groups.push_back(current_group);
             }
@@ -185,7 +181,6 @@ std::unordered_map<std::string, std::shared_ptr<Material>> Obj3DWriter::load_mat
         return materials;
     }
     
-    // Get directory for texture paths
     size_t last_slash = mtlFilePath.find_last_of("/\\");
     std::string directory = (last_slash == std::string::npos) ? "" : mtlFilePath.substr(0, last_slash);
     
