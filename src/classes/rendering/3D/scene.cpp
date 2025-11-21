@@ -18,12 +18,11 @@ void Scene::remove_object(int index) {
         objects.erase(objects.begin() + index);
     }
 }
-void Scene::update(float delta_time){
-    for (auto obj : objects) {
-        if (obj) {
-            obj->update(delta_time);
-        }
-    }
+void Scene::update(){
+    objects.erase(
+    std::remove_if(objects.begin(), objects.end(),
+        [](const std::shared_ptr<Obj3D>& obj) { return !obj->active;}),
+    objects.end());
 }
 void Scene::cleanup() {
     for (auto obj : objects) {

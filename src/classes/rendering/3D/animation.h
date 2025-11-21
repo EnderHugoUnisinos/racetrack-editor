@@ -8,6 +8,7 @@ class Animation {
 public:
     std::string name;
     std::vector<glm::vec3> keyframes;
+    std::vector<glm::vec3> points;
     float duration = 10.0f;
     bool looping = true;
     

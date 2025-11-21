@@ -12,7 +12,7 @@
 
 #include "obj3dwriter.h"
 
-std::string find_texture_file(const std::string& directory, const std::string& baseName) {
+std::string Obj3DWriter::find_texture_file(const std::string& directory, const std::string& baseName) {
     std::vector<std::string> extensions = {".png", ".jpg", ".jpeg", ".bmp", ".tga", ".tiff"};
     
     for (const auto& ext : extensions) {
@@ -37,7 +37,6 @@ void Obj3DWriter::write(std::shared_ptr<Obj3D> obj){
 };
 
 std::shared_ptr<Mesh> Obj3DWriter::load_from_file(const std::string& filename){
-    
     std::shared_ptr<Mesh> mesh = std::make_shared<Mesh>();
     std::ifstream file(filename);
     if (!file.is_open()) {
@@ -45,19 +44,12 @@ std::shared_ptr<Mesh> Obj3DWriter::load_from_file(const std::string& filename){
         return nullptr;
     }
 
-    
     size_t last_slash = filename.find_last_of("/\\");
     std::string directory = (last_slash == std::string::npos) ? "" : filename.substr(0, last_slash);
 
     std::unordered_map<std::string, std::shared_ptr<Material>> materials;
-    std::shared_ptr<Group> current_group = std::make_shared<Group>("Default");
-    mesh->groups.push_back(current_group);
+    std::shared_ptr<Group> current_group = nullptr;
     std::string current_material_name;
-    
-    /* OBJ3D WRITER
-    std::string directory = get_directory(filename);
-    std::string configPath = directory + "mesh_config.txt";
-    */
     
     std::string line;
     
@@ -67,14 +59,17 @@ std::shared_ptr<Mesh> Obj3DWriter::load_from_file(const std::string& filename){
         iss >> prefix;
         
         if (prefix == "g" || prefix == "o") {
-            // group
+            // Create new group
             std::string name;
             iss >> name;
-            if (!name.empty()) {
-                current_group = std::make_shared<Group>(name);
-                mesh->groups.push_back(current_group);
-                current_material_name.clear();
+            if (name.empty() && prefix == "o") {
+                // Some OBJ files use "o" without name, use default
+                name = "Default";
             }
+            
+            current_group = std::make_shared<Group>(name);
+            mesh->groups.push_back(current_group);
+            current_material_name.clear();
         }
         else if (prefix == "mtllib") {
             std::string mtl_file;
@@ -84,31 +79,41 @@ std::shared_ptr<Mesh> Obj3DWriter::load_from_file(const std::string& filename){
             materials.insert(loaded_materials.begin(), loaded_materials.end());
         }
         else if (prefix == "usemtl") {
+            if (!current_group) {
+                // If no group exists, create a default one
+                current_group = std::make_shared<Group>("Default");
+                mesh->groups.push_back(current_group);
+            }
+            
             iss >> current_material_name;
-            if (current_group && materials.find(current_material_name) != materials.end()) {
+            if (materials.find(current_material_name) != materials.end()) {
                 current_group->material = materials[current_material_name];
+            } else {
+                std::cerr << "Warning: Material '" << current_material_name << "' not found" << std::endl;
             }
         }
         else if (prefix == "v") {
-            // vertex
             glm::vec3 position;
             iss >> position.x >> position.y >> position.z;
             mesh->verts.push_back(position);
         }
         else if (prefix == "vt") {
-            // texture coord
             glm::vec2 texCoord;
             iss >> texCoord.x >> texCoord.y;
             mesh->mappings.push_back(texCoord);
         }
         else if (prefix == "vn") {
-            // normal
             glm::vec3 normal;
             iss >> normal.x >> normal.y >> normal.z;
             mesh->normals.push_back(normal);
         }
         else if (prefix == "f") {
-            // face
+            if (!current_group) {
+                // If we encounter a face before any group, create default group
+                current_group = std::make_shared<Group>("Default");
+                mesh->groups.push_back(current_group);
+            }
+            
             std::shared_ptr<Face> face = std::make_shared<Face>();
             std::string vertexData;
             
@@ -126,12 +131,12 @@ std::shared_ptr<Mesh> Obj3DWriter::load_from_file(const std::string& filename){
                 face->normals.push_back(indices[2]);
             }
             
-            if (current_group && face->verts.size() >= 3) {
+            if (face->verts.size() >= 3) {
                 current_group->faces.push_back(face);
             }
         }
     }
-    
+
     mesh->process_data();
     file.close();
     return mesh;
@@ -154,11 +159,17 @@ std::vector<std::shared_ptr<Obj3D>> Obj3DWriter::file_reader() {
         std::istringstream iss(line);
         std::string mesh_nm;
         std::string mesh_file;
+        int selectable;
+        int collidable;
+        int eliminable;
         
-        if (iss >> mesh_nm >> mesh_file) {
+        if (iss >> mesh_nm >> mesh_file >> selectable >> collidable >> eliminable) {
             auto obj3d = std::make_shared<Obj3D>();
             obj3d->name = mesh_nm;
             obj3d->obj_file = mesh_file;
+            obj3d->selectable = selectable;
+            obj3d->collidable = collidable;
+            obj3d->eliminable = eliminable;
             objs.push_back(obj3d);
         }
     }
@@ -210,6 +221,7 @@ std::unordered_map<std::string, std::shared_ptr<Material>> Obj3DWriter::load_mat
             iss >> texture_path;
             texture_path.erase(std::remove(texture_path.begin(), texture_path.end(), '\r'), texture_path.end());
             current_material->diffuseMap = find_texture_file(directory, texture_path);
+            //std::cout << directory << " " << texture_path << std::endl;
             std::cout << "Set diffuse map: " << current_material->diffuseMap << std::endl;
         }
         else if (prefix == "map_Ks" && current_material) {
@@ -222,7 +234,7 @@ std::unordered_map<std::string, std::shared_ptr<Material>> Obj3DWriter::load_mat
             std::string texture_path;
             iss >> texture_path;
             texture_path.erase(std::remove(texture_path.begin(), texture_path.end(), '\r'), texture_path.end());
-            current_material->normalMap = find_texture_file(directory, texture_path);
+            current_material->normalMap = Obj3DWriter::find_texture_file(directory, texture_path);
         }
     }
     

@@ -14,7 +14,7 @@ public:
     void add_object(std::shared_ptr<Obj3D> object);
     void remove_object(int index);
     
-    void update(float delta_time);
+    void update();
 
     void cleanup();
 };

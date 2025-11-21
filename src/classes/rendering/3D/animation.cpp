@@ -29,7 +29,7 @@ glm::vec3 Animation::get_position_at_time(float time) const {
 }
 
 void Animation::load_from_file(const std::string& filename) {
-    keyframes.clear();
+    //keyframes.clear();
     std::ifstream file(filename);
     if (!file.is_open()) {
         std::cerr << "Error: Could not open animation file " << filename << std::endl;
@@ -37,15 +37,17 @@ void Animation::load_from_file(const std::string& filename) {
     }
     
     std::string line;
+    //std::vector<glm::vec3> points;
     while (std::getline(file, line)) {
         if (line.empty() || line[0] == '#') continue;
         
         std::istringstream iss(line);
         glm::vec3 point;
-        if (iss >> point.x >> point.y >> point.z) {
+        if (iss >> point.x >> point.z >> point.y) {
             keyframes.push_back(point);
         }
     }
+
     file.close();
 }
 

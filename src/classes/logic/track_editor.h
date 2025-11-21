@@ -12,10 +12,12 @@ public:
     BSpline center_spline;
     float track_width;
     bool is_editing;
+    std::shared_ptr<Material> material;
 
     TrackEditor(float width = 1.0f) : track_width(width), is_editing(true) {}
 
     void add_control_point(const glm::vec2& point);
+    void pop_back_control_points();
     void clear_control_points();
     
     void generate_track_mesh(std::shared_ptr<Mesh>);

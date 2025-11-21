@@ -7,6 +7,7 @@
 #include <iostream>
 #include <algorithm>
 
+#include "obj3dwriter.h"
 #include "track_editor.h"
 
 void TrackEditor::add_control_point(const glm::vec2& point) {
@@ -20,6 +21,17 @@ void TrackEditor::add_control_point(const glm::vec2& point) {
     center_spline.set_control_points(points);
 }
 
+void TrackEditor::pop_back_control_points(){
+    if (control_points.size()) {
+        control_points.pop_back();
+        std::vector<glm::vec3> points;
+        for (const auto& p : control_points) {
+            points.push_back(glm::vec3(p.x, 0.0f, p.y));
+        }
+        center_spline.set_control_points(points);
+    }
+}
+
 void TrackEditor::clear_control_points() {
     control_points.clear();
     std::vector<glm::vec3> empty;
@@ -27,6 +39,7 @@ void TrackEditor::clear_control_points() {
 }
 
 void TrackEditor::generate_track_mesh(std::shared_ptr<Mesh> mesh) {
+    float textureScale = 0.2f; 
     if (control_points.size() < 4) {
         std::cout << "Need at least 4 control points for track generation" << std::endl;
         return;
@@ -36,6 +49,19 @@ void TrackEditor::generate_track_mesh(std::shared_ptr<Mesh> mesh) {
     if (centerPoints.size() < 2) {
         std::cout << "Not enough curve points generated" << std::endl;
         return;
+    }
+
+    if (!material) {
+        material = std::make_shared<Material>();
+        material->name = "track_material";
+        std::string texture_path = "road.jpg";
+        material->diffuseMap = texture_path;
+    }
+
+    if (!mesh->groups.size()) {
+        auto group = std::make_shared<Group>("track_group");
+        group->material = material;
+        mesh->groups.push_back(group);
     }
 
     // Clear existing mesh data
@@ -79,27 +105,28 @@ void TrackEditor::generate_track_mesh(std::shared_ptr<Mesh> mesh) {
         
         // Add inner vertex
         mesh->verts.push_back(innerPoints[i]);
-        mesh->mappings.push_back(glm::vec2(static_cast<float>(i) / (centerPoints.size() - 1), 0.0f));
+        mesh->mappings.push_back(glm::vec2(static_cast<float>(i) * textureScale, 0.0f));
         mesh->normals.push_back(surfaceNormal);
         
         // Add outer vertex
         mesh->verts.push_back(outerPoints[i]);
-        mesh->mappings.push_back(glm::vec2(static_cast<float>(i) / (centerPoints.size() - 1), 1.0f));
+        mesh->mappings.push_back(glm::vec2(static_cast<float>(i) * textureScale, 1.0f));
         mesh->normals.push_back(surfaceNormal);
     }
+    //manually remove last vertices and replace with starting ones ???
+    mesh->verts.pop_back();
+    mesh->mappings.pop_back();
+    mesh->normals.pop_back();
+    mesh->verts.pop_back();
+    mesh->mappings.pop_back();
+    mesh->normals.pop_back();
 
-    // Setup material and group if needed
-    if (!mesh->groups.size()) {
-        auto group = std::make_shared<Group>("Default");
-        auto material = std::make_shared<Material>();
-        material->name = "TrackMaterial";
-        material->diffuse = glm::vec3(0.2f, 0.6f, 0.2f);
-        material->ambient = glm::vec3(0.1f, 0.3f, 0.1f);
-        material->specular = glm::vec3(0.1f, 0.1f, 0.1f);
-        material->shininess = 32.0f;
-        group->material = material;
-        mesh->groups.push_back(group);
-    }
+    mesh->verts.push_back(mesh->verts[0]);
+    mesh->mappings.push_back(mesh->mappings[0]);
+    mesh->normals.push_back(mesh->normals[0]);
+    mesh->verts.push_back(mesh->verts[1]);
+    mesh->mappings.push_back(mesh->mappings[1]);
+    mesh->normals.push_back(mesh->normals[1]);
 
     mesh->groups[0]->VAO = 0;
     mesh->groups[0]->VBO = 0;
@@ -111,21 +138,19 @@ void TrackEditor::generate_track_mesh(std::shared_ptr<Mesh> mesh) {
     for (int i = 0; i < numSegments; i++) {
         int next_i = (i + 1) % numSegments;
         
-        // Get vertex indices for current segment
         int inner_current = i * 2;
         int outer_current = i * 2 + 1;
         int inner_next = next_i * 2;
         int outer_next = next_i * 2 + 1;
         
-        // Create two triangles that form a quad between current and next segment
-        // First triangle: inner_current -> inner_next -> outer_current
+        //inner_current -> inner_next -> outer_current
         auto face1 = std::make_shared<Face>();
         face1->verts = {inner_current, inner_next, outer_current};
         face1->textures = {inner_current, inner_next, outer_current};
         face1->normals = {inner_current, inner_next, outer_current};
         mesh->groups[0]->faces.push_back(face1);
         
-        // Second triangle: outer_current -> inner_next -> outer_next
+        //outer_current -> inner_next -> outer_next
         auto face2 = std::make_shared<Face>();
         face2->verts = {outer_current, inner_next, outer_next};
         face2->textures = {outer_current, inner_next, outer_next};
@@ -140,10 +165,8 @@ void TrackEditor::generate_track_mesh(std::shared_ptr<Mesh> mesh) {
               << mesh->groups[0]->faces.size() << " triangles)" << std::endl;
 }
 
-
 void TrackEditor::export_track_OBJ(const std::string& filename) {
     auto mesh = std::make_shared<Mesh>();
-    
     generate_track_mesh(mesh);
     
     std::ofstream file(filename);
@@ -154,7 +177,9 @@ void TrackEditor::export_track_OBJ(const std::string& filename) {
     
     file << "# Racetrack exported from editor\n";
     file << "# Vertices: " << mesh->verts.size() << "\n\n";
-    
+
+    file << "mtllib exported_track.mtl\n";
+    file << "o track\n";
     // Write vertices
     for (const auto& vertex : mesh->verts) {
         file << "v " << vertex.x << " " << vertex.y << " " << vertex.z << "\n";
